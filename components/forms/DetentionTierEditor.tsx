@@ -1,11 +1,13 @@
 'use client'
 
+import { logger } from '@/lib/utils/logger'
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { 
   Plus, 
   Edit, 
@@ -68,7 +70,7 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
       const updatedTiers = deleteTierStep(tiers, index)
       onTiersChange(updatedTiers)
     } catch (error) {
-      console.error('Error deleting tier:', error)
+      logger.error('Error deleting tier:', error)
     }
   }
 
@@ -344,22 +346,30 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
           {/* Save as Default Button */}
           {onSaveDefault && carrier && tiers.length > 0 && (
             <div className="mt-3 pt-3 border-t border-green-200">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onSaveDefault}
-                disabled={savingDefaults}
-                className="w-full border-green-300 text-green-700 hover:bg-green-50"
-              >
-                {savingDefaults ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>💾 Save as Default for {carrier}</>
-                )}
-              </Button>
+              <ConfirmDialog
+                title="Save as Default"
+                description={`Save these detention tier settings as the default for ${carrier}?`}
+                onConfirm={onSaveDefault}
+                confirmText="Save"
+                cancelText="Cancel"
+                trigger={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={savingDefaults}
+                    className="w-full border-green-300 text-green-700 hover:bg-green-50"
+                  >
+                    {savingDefaults ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>💾 Save as Default for {carrier}</>
+                    )}
+                  </Button>
+                }
+              />
             </div>
           )}
         </div>

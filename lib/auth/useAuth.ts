@@ -1,4 +1,5 @@
 "use client";
+import { logger } from '@/lib/utils/logger'
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -12,20 +13,20 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[useAuth] profile updated', profile?.current_list_id)
+    logger.log('[useAuth] profile updated', profile?.current_list_id)
   }, [profile?.current_list_id])
 
   useEffect(() => {
-    console.log("[useAuth] Initializing...");
+    logger.log("[useAuth] Initializing...");
     async function load() {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
 
-        if (error) console.error("[useAuth] Session error:", error);
+        if (error) logger.error("[useAuth] Session error:", error);
 
         // ❌ Fix corrupted cookies (base64 parse error)
         if (!session) {
-          console.warn("[useAuth] No session — clearing Supabase cookies");
+          logger.warn("[useAuth] No session — clearing Supabase cookies");
           for (const cookie of document.cookie.split(";")) {
             if (cookie.trim().startsWith("sb-")) {
               const [name] = cookie.split("=");
@@ -40,7 +41,7 @@ export function useAuth() {
 
         const currentUser = session.user;
         setUser(currentUser);
-        console.log("[useAuth] Signed in as:", currentUser.email);
+        logger.log("[useAuth] Signed in as:", currentUser.email);
 
         const { data: p } = await supabase
           .from("profiles")
@@ -50,7 +51,7 @@ export function useAuth() {
 
         setProfile(p ?? null);
       } catch (e) {
-        console.error("[useAuth] Error:", e);
+        logger.error("[useAuth] Error:", e);
         setUser(null);
       } finally {
         setLoading(false);

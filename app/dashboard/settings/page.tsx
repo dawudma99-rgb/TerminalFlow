@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { useAuth } from '@/lib/auth/useAuth'
 import { loadSettings, saveSettings, type Settings } from '@/lib/data/settings-actions'
@@ -70,26 +71,26 @@ export default function SettingsPage() {
 
   // Load settings on mount
   useEffect(() => {
-    console.log('[settings-page] useEffect triggered', { user: user?.id, loading, settingsLoading })
+    logger.log('[settings-page] useEffect triggered', { user: user?.id, loading, settingsLoading })
     
     // Wait for auth to finish loading
     if (loading) {
-      console.log('[settings-page] Auth still loading, waiting...')
+      logger.log('[settings-page] Auth still loading, waiting...')
       return
     }
     
     // If no user after auth loads, clear loading state
     if (!user) {
-      console.log('[settings-page] No user, clearing settings loading')
+      logger.log('[settings-page] No user, clearing settings loading')
       setSettingsLoading(false)
       return
     }
     
     // User exists, load settings
-    console.log('[settings-page] Loading settings for user:', user.id)
+    logger.log('[settings-page] Loading settings for user:', user.id)
     loadSettings()
       .then((data) => {
-        console.log('[settings-page] Settings loaded successfully:', data)
+        logger.log('[settings-page] Settings loaded successfully:', data)
         setSettings(data)
         setSettingsLoading(false)
         
@@ -99,14 +100,18 @@ export default function SettingsPage() {
             .then((carrierData) => {
               setCarrierDefaults(carrierData)
             })
-            .catch((err) => console.error('Failed to load carrier defaults', err))
+            .catch((err) => {
+              logger.error('Failed to load carrier defaults', err)
+              toast.error('Failed to load carrier defaults')
+            })
             .finally(() => setLoadingCarriers(false))
         } else {
           setLoadingCarriers(false)
         }
       })
       .catch((err) => {
-        console.error('[settings-page] Failed to load settings:', err)
+        logger.error('[settings-page] Failed to load settings:', err)
+        toast.error('Failed to load settings. Using defaults.')
         // Set defaults on error
         const defaults: Settings = {
           demurrageDailyRate: 80,
@@ -128,7 +133,7 @@ export default function SettingsPage() {
       await saveSettings(settings)
       toast.success('Settings saved successfully')
     } catch (err) {
-      console.error(err)
+      logger.error('Failed to save settings:', err)
       toast.error(err instanceof Error ? err.message : 'Failed to save settings')
     } finally {
       setSaving(false)
@@ -150,8 +155,8 @@ export default function SettingsPage() {
       URL.revokeObjectURL(url)
       toast.success('Data exported successfully')
     } catch (err) {
+      logger.error('Export failed:', err)
       toast.error(err instanceof Error ? err.message : 'Export failed')
-      console.error(err)
     }
   }
 
@@ -171,8 +176,8 @@ export default function SettingsPage() {
       // Refresh the page to show new data
       router.refresh()
       } catch (err) {
+        logger.error('Import failed:', err)
         toast.error(err instanceof Error ? err.message : 'Import failed')
-        console.error(err)
       } finally {
         setImporting(false)
       }
@@ -189,8 +194,8 @@ export default function SettingsPage() {
       // Refresh the page to show new data
       router.refresh()
     } catch (err) {
+      logger.error('Seeding failed:', err)
       toast.error(err instanceof Error ? err.message : 'Seeding failed')
-      console.error(err)
     } finally {
       setSeeding(false)
     }
@@ -205,8 +210,8 @@ export default function SettingsPage() {
       // Refresh the page to reflect changes
       router.refresh()
     } catch (err) {
+      logger.error('Clear failed:', err)
       toast.error(err instanceof Error ? err.message : 'Clear failed')
-      console.error(err)
     } finally {
       setClearing(false)
     }
@@ -430,7 +435,7 @@ export default function SettingsPage() {
                             setCarrierDefaults(updated)
                           } catch (err) {
                             toast.error('Failed to delete carrier defaults')
-                            console.error(err)
+                            logger.error('Failed to delete carrier defaults:', err)
                           }
                         }}
                       >
@@ -615,7 +620,7 @@ export default function SettingsPage() {
                     setCarrierDefaults(updated)
                   } catch (err) {
                     toast.error('Failed to save carrier defaults')
-                    console.error(err)
+                    logger.error('Failed to save carrier defaults:', err)
                   } finally {
                     setSavingCarrier(false)
                   }

@@ -20,8 +20,10 @@ import { DetentionTierEditor } from './DetentionTierEditor'
 import { Tier, validateTierConfiguration } from '@/lib/tierUtils'
 import { getCarrierDefaults, saveCarrierDefaults } from '@/lib/data/carrier-actions'
 import { useAuth } from '@/lib/auth/useAuth'
+import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { insertContainer, type ContainerInsert } from '@/lib/data/containers-actions'
 import type { Database } from '@/types/database'
 
@@ -159,7 +161,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         }
       }
     } catch (error) {
-      console.error('Error loading carrier defaults:', error)
+      logger.error('Error loading carrier defaults:', error)
       toast.error(`Failed to load defaults for ${carrier}`)
     } finally {
       setLoadingDefaults(false)
@@ -179,13 +181,6 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       return
     }
 
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Save these tier settings as the default for ${formData.carrier}?`
-    )
-    
-    if (!confirmed) return
-
     setSavingDefaults(true)
     try {
       await saveCarrierDefaults(
@@ -196,7 +191,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       )
       toast.success(`Carrier defaults updated for ${formData.carrier}`)
     } catch (error) {
-      console.error('Error saving carrier defaults:', error)
+      logger.error('Error saving carrier defaults:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to save carrier defaults')
     } finally {
       setSavingDefaults(false)
@@ -216,13 +211,6 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       return
     }
 
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Save these tier settings as the default for ${formData.carrier}?`
-    )
-    
-    if (!confirmed) return
-
     setSavingDefaults(true)
     try {
       await saveCarrierDefaults(
@@ -233,7 +221,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       )
       toast.success(`Carrier defaults updated for ${formData.carrier}`)
     } catch (error) {
-      console.error('Error saving carrier defaults:', error)
+      logger.error('Error saving carrier defaults:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to save carrier defaults')
     } finally {
       setSavingDefaults(false)
@@ -345,7 +333,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         onClose()
       }, 500)
     } catch (error) {
-      console.error('Error saving container:', error)
+      logger.error('Error saving container:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to add container')
     } finally {
       setIsSubmitting(false)
@@ -632,7 +620,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                             toast.success(`Saved ${formData.carrier} as default`)
                           } catch (err) {
                             toast.error('Failed to save default')
-                            console.error(err)
+                            logger.error('Error saving defaults:', err)
                           } finally {
                             setSavingDefaults(false)
                           }

@@ -1,8 +1,8 @@
 'use client'
 
+import { logger } from '@/lib/utils/logger'
 import { useContainers } from '@/lib/data/useContainers'
 import { insertContainer, updateContainer, deleteContainer, type ContainerInsert, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
-import { useAuth } from '@/lib/auth/useAuth'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,8 +39,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import clsx from 'clsx'
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
-import { Plus, Edit, Trash2, Lock, Unlock, Container, Search, X, RefreshCcw, List } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Plus, Edit, Trash2, Lock, Unlock, Container, Search, X, RefreshCcw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Tier } from '@/lib/tierUtils'
 import type { ContainerUpdate } from '@/lib/data/containers-actions'
@@ -56,9 +56,7 @@ import {
   ToggleGroupItem,
 } from '@/components/ui/toggle-group'
 import { toast } from 'sonner'
-import { useRouter } from 'next/navigation'
-import { getLists, createList, deleteList } from '@/lib/data/lists'
-import { useLists } from '@/lib/hooks/useLists'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 function AddContainerTrigger() {
   const [isOpen, setIsOpen] = useState(false)
@@ -87,13 +85,14 @@ function AddContainerTrigger() {
         carrier: data.carrier || null,
         container_size: data.container_size || null,
         notes: data.notes || null,
-        list_id: null, // No list filtering anymore
       }
 
       await insertContainer(containerData as ContainerInsert)
-      console.log('Container added successfully!')
+      toast.success('Container added successfully!')
+      logger.log('Container added successfully!')
     } catch (error) {
-      console.error('Error adding container:', error)
+      logger.error('Error adding container:', error)
+      toast.error('Failed to add container. Please try again.')
     }
   }
 
@@ -172,10 +171,11 @@ function EditContainerDialog({
       }
 
       await updateContainer(container.id, updatedData)
+      toast.success('Container updated successfully')
       onClose()
     } catch (error) {
-      console.error('Error updating container:', error)
-      alert('Failed to update container. Please try again.')
+      logger.error('Error updating container:', error)
+      toast.error('Failed to update container. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -290,58 +290,15 @@ function EditContainerDialog({
 
 export default function ContainersPage() {
   useEffect(() => {
-    console.log("COMPONENT: containers/page.tsx loaded")
+    logger.log("COMPONENT: containers/page.tsx loaded")
   }, [])
   
   const { containers, loading, error, reload } = useContainers()
-  const { profile, loading: authLoading, user } = useAuth()
-  const { lists, loading: loadingLists, activeListId, ready, switchListLocally } = useLists(
-    profile?.organization_id,
-    profile?.current_list_id
-  )
   
-  const router = useRouter()
   const [editingContainer, setEditingContainer] = useState<ContainerRecordWithComputed | null>(null)
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now())
   const [timeAgo, setTimeAgo] = useState<string>('Just now')
   const [isRefreshing, setIsRefreshing] = useState(false)
-  
-  // Test list functions
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    console.log('⚙️ Client side loaded — window defined');
-
-    if (!profile) {
-      console.log('🚫 No profile yet — skipping verifyLists for now');
-      return;
-    }
-
-    if (!profile.organization_id) {
-      console.log('⚠️ Profile exists but missing organization_id');
-      return;
-    }
-
-    const verifyLists = async () => {
-      try {
-        console.log('🔍 Starting safe list verification...');
-        const lists = await getLists(profile.organization_id);
-        console.log('✅ getLists() result:', lists);
-
-        const newList = await createList('Verification List', profile.organization_id);
-        console.log('✅ createList() result:', newList);
-
-        await deleteList(newList.id);
-        console.log('✅ deleteList() completed successfully');
-
-        console.log('🎯 All list functions verified OK ✅');
-      } catch (err) {
-        console.error('❌ List verification failed:', err);
-      }
-    };
-
-    const timer = setTimeout(verifyLists, 800);
-    return () => clearTimeout(timer);
-  }, [profile]);
   
   // Filter state
   const [searchQuery, setSearchQuery] = useState('')
@@ -402,34 +359,32 @@ export default function ContainersPage() {
       await reload()
       setLastUpdated(Date.now())
       setTimeAgo('Just now')
+      toast.success('Containers refreshed successfully')
     } catch (err) {
-      console.error('Error refreshing containers:', err)
+      logger.error('Error refreshing containers:', err)
+      toast.error('Failed to refresh containers. Please try again.')
     } finally {
       setIsRefreshing(false)
     }
   }
 
   const handleDeleteContainer = async (containerId: string, containerNo: string) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete container "${containerNo}"? This action cannot be undone.`
-    )
-    
-    if (confirmed) {
-      try {
-        await deleteContainer(containerId)
-      } catch (error) {
-        console.error('Error deleting container:', error)
-        alert('Failed to delete container. Please try again.')
-      }
+    try {
+      await deleteContainer(containerId)
+      toast.success(`Container "${containerNo}" deleted successfully`)
+    } catch (error) {
+      logger.error('Error deleting container:', error)
+      toast.error('Failed to delete container. Please try again.')
     }
   }
 
   const handleToggleContainerStatus = async (containerId: string, isCurrentlyClosed: boolean) => {
     try {
       await updateContainer(containerId, { is_closed: !isCurrentlyClosed })
+      toast.success(`Container ${isCurrentlyClosed ? 'reopened' : 'closed'} successfully`)
     } catch (error) {
-      console.error('Error updating container status:', error)
-      alert('Failed to update container status. Please try again.')
+      logger.error('Error updating container status:', error)
+      toast.error('Failed to update container status. Please try again.')
     }
   }
 
@@ -443,17 +398,7 @@ export default function ContainersPage() {
 
   // Apply filters
   const filteredContainers = useMemo(() => {
-    // Filter by active list only if we have an activeListId and lists are ready
-    // Otherwise show all containers (while loading or if no active list)
-    // If filtering by list results in empty, fallback to all containers (backwards compat)
-    let listFiltered = containers
-    if (ready && activeListId) {
-      const listFilteredResult = containers.filter(c => c.list_id === activeListId)
-      // If filtering results in empty, show all containers (containers might not have list_id set yet)
-      listFiltered = listFilteredResult.length > 0 ? listFilteredResult : containers
-    }
-    
-    const filtered = listFiltered.filter((container) => {
+    const filtered = containers.filter((container) => {
       // View mode filter
       if (viewMode === 'demurrage') {
         // Demurrage: only containers with arrival_date and free_days defined
@@ -501,9 +446,8 @@ export default function ContainersPage() {
 
       return true
     })
-    console.log("🧩 [Filter Diagnostic] Showing", filtered.length, "containers for list", activeListId)
     return filtered
-  }, [containers, activeListId, ready, viewMode, searchQuery, statusFilter, ownerFilter])
+  }, [containers, viewMode, searchQuery, statusFilter, ownerFilter])
 
   const handleClearFilters = () => {
     setSearchQuery('')
@@ -731,25 +675,6 @@ export default function ContainersPage() {
               </Card>
             </div>
 
-            {/* List Tabs */}
-            {lists.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                {lists.map(list => (
-                  <button
-                    key={list.id}
-                    onClick={() => switchListLocally(list.id)}
-                    className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                      list.id === activeListId
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
-                    }`}
-                  >
-                    {list.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
             {/* Filter Toolbar */}
             <div className="bg-white rounded-lg shadow-sm border border-border p-4 mb-4">
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
@@ -976,24 +901,33 @@ export default function ContainersPage() {
                                 </TooltipContent>
                               </Tooltip>
 
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDeleteContainer(
-                                      container.id,
-                                      container.container_no || 'Unnamed Container'
-                                    )}
-                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Delete Container</p>
-                                </TooltipContent>
-                              </Tooltip>
+                              <ConfirmDialog
+                                title="Delete Container"
+                                description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
+                                onConfirm={() => handleDeleteContainer(
+                                  container.id,
+                                  container.container_no || 'Unnamed Container'
+                                )}
+                                confirmText="Delete"
+                                cancelText="Cancel"
+                                variant="destructive"
+                                trigger={
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Delete Container</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                }
+                              />
                             </TooltipProvider>
                           </div>
                         </TableCell>

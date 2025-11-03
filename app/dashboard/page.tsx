@@ -1,5 +1,8 @@
 'use client'
 
+import { logger } from '@/lib/utils/logger'
+import { toast } from 'sonner'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useContainers } from '@/lib/data/useContainers'
 import { insertContainer, updateContainer, deleteContainer, type ContainerInsert, type ContainerUpdate, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -45,9 +48,11 @@ function AddContainerTrigger() {
       }
 
       await insertContainer(containerData as ContainerInsert)
-      console.log('Container added successfully!')
+      toast.success('Container added successfully!')
+      logger.log('Container added successfully!')
     } catch (error) {
-      console.error('Error adding container:', error)
+      logger.error('Error adding container:', error)
+      toast.error('Failed to add container. Please try again.')
     }
   }
 
@@ -90,6 +95,7 @@ function EditContainerForm({ container, onClose }: { container: ContainerRecordW
       }
 
       await updateContainer(container.id, updatedData as ContainerUpdate)
+      toast.success('Container updated successfully!')
       setSuccessMessage('Container updated!')
       
       // Clear success message after 3 seconds
@@ -98,7 +104,8 @@ function EditContainerForm({ container, onClose }: { container: ContainerRecordW
         onClose()
       }, 1500)
     } catch (error) {
-      console.error('Error updating container:', error)
+      logger.error('Error updating container:', error)
+      toast.error('Failed to update container. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -250,28 +257,24 @@ export default function DashboardPage() {
   const [editingContainerId, setEditingContainerId] = useState<string | null>(null)
 
   const handleDeleteContainer = async (containerId: string, containerNo: string) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete container "${containerNo}"? This action cannot be undone.`
-    )
-    
-    if (confirmed) {
-      try {
-        await deleteContainer(containerId)
-        // The dashboard will automatically refresh due to revalidatePath in the server action
-      } catch (error) {
-        console.error('Error deleting container:', error)
-        alert('Failed to delete container. Please try again.')
-      }
+    try {
+      await deleteContainer(containerId)
+      toast.success(`Container "${containerNo}" deleted successfully`)
+      // The dashboard will automatically refresh due to revalidatePath in the server action
+    } catch (error) {
+      logger.error('Error deleting container:', error)
+      toast.error('Failed to delete container. Please try again.')
     }
   }
 
   const handleToggleContainerStatus = async (containerId: string, isCurrentlyClosed: boolean) => {
     try {
       await updateContainer(containerId, { is_closed: !isCurrentlyClosed })
+      toast.success(`Container ${isCurrentlyClosed ? 'reopened' : 'closed'} successfully`)
       // The dashboard will automatically refresh due to revalidatePath in the server action
     } catch (error) {
-      console.error('Error updating container status:', error)
-      alert('Failed to update container status. Please try again.')
+      logger.error('Error updating container status:', error)
+      toast.error('Failed to update container status. Please try again.')
     }
   }
 
@@ -348,14 +351,23 @@ export default function DashboardPage() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteContainer(c.id, c.container_no || 'Unnamed Container')}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <ConfirmDialog
+                        title="Delete Container"
+                        description={`Are you sure you want to delete container "${c.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
+                        onConfirm={() => handleDeleteContainer(c.id, c.container_no || 'Unnamed Container')}
+                        confirmText="Delete"
+                        cancelText="Cancel"
+                        variant="destructive"
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
                       <Button
                         variant="ghost"
                         size="sm"

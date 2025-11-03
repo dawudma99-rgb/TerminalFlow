@@ -5,6 +5,7 @@
  * Uses SWR for caching and background revalidation.
  */
 
+import { logger } from '@/lib/utils/logger'
 import useSWR from 'swr'
 import { fetchContainers } from './containers-actions'
 import type { ContainerRecordWithComputed } from './containers-actions'
@@ -12,9 +13,9 @@ import type { ContainerRecordWithComputed } from './containers-actions'
 export type ContainerWithComputed = ContainerRecordWithComputed
 
 const fetcher = async () => {
-  console.time('fetchContainers latency')
+  logger.time('fetchContainers latency')
   const data = await fetchContainers()
-  console.timeEnd('fetchContainers latency')
+  logger.timeEnd('fetchContainers latency')
   return data
 }
 

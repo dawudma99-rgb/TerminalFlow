@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth/useAuth'
 import { useEffect, useState } from 'react'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { getOrganization, updateProfile } from '@/lib/data/user-actions'
+import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { AppLayout } from '@/components/layout/AppLayout'
 
@@ -17,7 +18,7 @@ export default function ProfilePage() {
     if (loading) return
 
     if (!user || !profile) {
-      console.warn('[profile-page] No user or profile found after auth load')
+      logger.warn('[profile-page] No user or profile found after auth load')
       setOrgLoading(false)
       return
     }
@@ -31,7 +32,7 @@ export default function ProfilePage() {
           setOrganization(orgData)
         }
       } catch (err) {
-        console.error('[profile-page] Error loading organization:', err)
+        logger.error('[profile-page] Error loading organization:', err)
       } finally {
         setOrgLoading(false)
       }
@@ -50,7 +51,7 @@ export default function ProfilePage() {
       })
       toast.success('Profile updated successfully')
     } catch (err) {
-      console.error('[profile-page] updateProfile failed:', err)
+      logger.error('[profile-page] updateProfile failed:', err)
       toast.error(err instanceof Error ? err.message : 'Failed to update profile')
     } finally {
       setUpdating(false)
