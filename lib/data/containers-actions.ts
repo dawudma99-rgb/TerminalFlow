@@ -28,20 +28,34 @@ async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Pro
   return profile.organization_id
 }
 
+async function getUserId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('User not authenticated')
+  return user.id
+}
+
 // --- Read ---
 /**
- * Fetch all containers for the current authenticated user / organization.
+ * Fetch containers for the current authenticated user / organization.
+ * If listId is provided, filters by list_id. Otherwise returns all containers for the org.
  * Returns containers with computed derived fields (days_left, status).
  * Cached to prevent duplicate queries during render.
  */
-export const fetchContainers = cache(async function fetchContainers(): Promise<ContainerRecordWithComputed[]> {
+export const fetchContainers = cache(async function fetchContainers(listId?: string | null): Promise<ContainerRecordWithComputed[]> {
   const supabase = await createClient()
   const orgId = await getOrgId(supabase)
-  const { data, error } = await supabase
+  
+  let query = supabase
     .from('containers')
     .select('*')
     .eq('organization_id', orgId)
-    .order('updated_at', { ascending: false })
+  
+  // Filter by list_id if provided
+  if (listId) {
+    query = query.eq('list_id', listId)
+  }
+  
+  const { data, error } = await query.order('updated_at', { ascending: false })
 
   if (error) throw new Error(`Supabase fetchContainers error: ${error.message}`)
   if (!data) return []
@@ -55,16 +69,40 @@ export const fetchContainers = cache(async function fetchContainers(): Promise<C
 // --- Create ---
 /**
  * Insert a new container record.
+ * If listId is provided, assigns container to that list.
+ * If no listId provided, fetches current_list_id from user's profile.
+ * Always sets list_id (never null).
  */
-export async function insertContainer(container: Omit<ContainerInsert, 'organization_id'>) {
+export async function insertContainer(
+  container: Omit<ContainerInsert, 'organization_id' | 'list_id'>,
+  listId?: string | null
+) {
   const supabase = await createClient()
   
   // Get the current user's organization_id
   const orgId = await getOrgId(supabase)
   
+  // If no listId provided, fetch from profile
+  let finalListId = listId
+  if (!finalListId) {
+    const userId = await getUserId(supabase)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('current_list_id')
+      .eq('id', userId)
+      .single()
+    
+    if (profileError) {
+      throw new Error(`Failed to fetch profile: ${profileError.message}`)
+    }
+    
+    finalListId = profile?.current_list_id ?? null
+  }
+  
   const containerWithOrg = {
     ...container,
-    organization_id: orgId
+    organization_id: orgId,
+    list_id: finalListId, // Always set list_id (can be null if no active list)
   }
   
   const { data, error } = await supabase
@@ -75,6 +113,7 @@ export async function insertContainer(container: Omit<ContainerInsert, 'organiza
 
   if (error) throw new Error(`Supabase insertContainer error: ${error.message}`)
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/containers')
   return data
 }
 
@@ -95,6 +134,7 @@ export async function updateContainer(id: string, fields: ContainerUpdate) {
 
   if (error) throw new Error(`Supabase updateContainer error: ${error.message}`)
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/containers')
   return data
 }
 
@@ -113,6 +153,7 @@ export async function deleteContainer(id: string) {
 
   if (error) throw new Error(`Supabase deleteContainer error: ${error.message}`)
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/containers')
   return { success: true, id }
 }
 

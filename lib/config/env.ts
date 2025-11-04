@@ -39,3 +39,4 @@ if (env.NODE_ENV === 'development') {
   console.log('✅ Environment variables loaded and validated successfully')
 }
 
+

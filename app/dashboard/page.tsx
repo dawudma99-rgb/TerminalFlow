@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useContainers } from '@/lib/data/useContainers'
 import { insertContainer, updateContainer, deleteContainer, type ContainerInsert, type ContainerUpdate, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
+import { useListsContext } from '@/components/providers/ListsProvider'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -253,7 +254,8 @@ function EditContainerForm({ container, onClose }: { container: ContainerRecordW
 }
 
 export default function DashboardPage() {
-  const { containers, loading, error, reload } = useContainers()
+  const { activeListId } = useListsContext()
+  const { containers, loading, error, reload } = useContainers(activeListId)
   const [editingContainerId, setEditingContainerId] = useState<string | null>(null)
 
   const handleDeleteContainer = async (containerId: string, containerNo: string) => {

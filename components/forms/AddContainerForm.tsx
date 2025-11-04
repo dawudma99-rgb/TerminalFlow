@@ -24,7 +24,6 @@ import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { insertContainer, type ContainerInsert } from '@/lib/data/containers-actions'
 import type { Database } from '@/types/database'
 
 // UK carrier presets with standard demurrage/detention rates
@@ -300,29 +299,12 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
 
     setIsSubmitting(true)
     try {
-      // Prepare container data (only include fields that exist in database schema)
-      const containerData: Omit<ContainerInsert, 'organization_id'> = {
-        container_no: formData.container_no,
-        port: formData.port,
-        arrival_date: formData.arrival_date,
-        free_days: formData.free_days,
-        carrier: formData.carrier || null,
-        container_size: formData.container_size || null,
-        notes: formData.notes || null,
-        demurrage_tiers: formData.demurrage_tiers.length > 0 ? formData.demurrage_tiers as unknown as Database['public']['Tables']['containers']['Insert']['demurrage_tiers'] : null,
-        detention_tiers: formData.detention_tiers.length > 0 ? formData.detention_tiers as unknown as Database['public']['Tables']['containers']['Insert']['detention_tiers'] : null,
-        has_detention: formData.detention_enabled,
-        // Note: demurrage_fee_if_late and detention_fee_rate are not set from form data in this implementation
-      }
-
-      await insertContainer(containerData)
-      
-      // Success toast
-      toast.success('Container added successfully')
-      
-      // Call onSave callback if provided
+      // Call parent's onSave callback to handle insertion
       if (onSave) {
-        onSave(formData)
+        await onSave(formData)
+      } else {
+        toast.error('Missing onSave handler — cannot save container')
+        return
       }
       
       // Reset form

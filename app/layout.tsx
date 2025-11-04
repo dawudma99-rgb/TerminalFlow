@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorHandlerProvider } from "@/components/ErrorHandlerProvider";
+import { ListsProvider } from "@/components/providers/ListsProvider";
 import { Toaster } from "sonner";
 
 const inter = Inter({
@@ -30,8 +31,10 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            {children}
-            <Toaster position="top-right" richColors />
+            <ListsProvider>
+              {children}
+              <Toaster position="top-right" richColors />
+            </ListsProvider>
           </ThemeProvider>
         </ErrorHandlerProvider>
       </body>

@@ -3,6 +3,8 @@
 import { logger } from '@/lib/utils/logger'
 import { useContainers } from '@/lib/data/useContainers'
 import { insertContainer, updateContainer, deleteContainer, type ContainerInsert, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
+import { useListsContext } from '@/components/providers/ListsProvider'
+import { ListSwitcher } from '@/components/lists/ListSwitcher'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,7 +60,7 @@ import {
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
-function AddContainerTrigger() {
+function AddContainerTrigger({ reload }: { reload?: () => Promise<void> }) {
   const [isOpen, setIsOpen] = useState(false)
 
   const handleSave = async (data: {
@@ -88,6 +90,10 @@ function AddContainerTrigger() {
       }
 
       await insertContainer(containerData as ContainerInsert)
+      console.log('[CreateContainer] Created in DB, reloading containers...')
+      if (reload) {
+        await reload()
+      }
       toast.success('Container added successfully!')
       logger.log('Container added successfully!')
     } catch (error) {
@@ -289,11 +295,17 @@ function EditContainerDialog({
 }
 
 export default function ContainersPage() {
+  const { activeListId } = useListsContext()
+  
+  useEffect(() => {
+    logger.log("[ContainersPage] activeListId:", activeListId)
+  }, [activeListId])
+  
   useEffect(() => {
     logger.log("COMPONENT: containers/page.tsx loaded")
   }, [])
   
-  const { containers, loading, error, reload } = useContainers()
+  const { containers, loading, error, reload } = useContainers(activeListId)
   
   const [editingContainer, setEditingContainer] = useState<ContainerRecordWithComputed | null>(null)
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now())
@@ -371,6 +383,8 @@ export default function ContainersPage() {
   const handleDeleteContainer = async (containerId: string, containerNo: string) => {
     try {
       await deleteContainer(containerId)
+      console.log('[DeleteContainer] Deleted from DB, reloading containers...')
+      await reload()
       toast.success(`Container "${containerNo}" deleted successfully`)
     } catch (error) {
       logger.error('Error deleting container:', error)
@@ -531,7 +545,7 @@ export default function ContainersPage() {
         <div className="max-w-7xl mx-auto p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-foreground">Containers</h1>
-            <AddContainerTrigger />
+            <AddContainerTrigger reload={reload} />
           </div>
           <LoadingState message="Loading containers..." />
         </div>
@@ -546,7 +560,7 @@ export default function ContainersPage() {
         <div className="max-w-7xl mx-auto p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-foreground">Containers</h1>
-            <AddContainerTrigger />
+            <AddContainerTrigger reload={reload} />
           </div>
           <ErrorAlert 
             message={error.message || "Failed to load containers"}
@@ -560,9 +574,13 @@ export default function ContainersPage() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-foreground">Containers</h1>
-          <AddContainerTrigger />
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-semibold">Containers</h1>
+          <ListSwitcher />
+        </div>
+        
+        <div className="flex justify-end items-center mb-4">
+          <AddContainerTrigger reload={reload} />
         </div>
         
         {/* Show error banner if error occurred but we have cached data */}
@@ -580,7 +598,7 @@ export default function ContainersPage() {
             title="No containers found"
             description="Get started by adding your first container to track its status and manage operations."
             icon={<Container className="h-12 w-12 text-muted-foreground" />}
-            action={<AddContainerTrigger />}
+            action={<AddContainerTrigger reload={reload} />}
           />
         ) : (
           <>
@@ -901,19 +919,18 @@ export default function ContainersPage() {
                                 </TooltipContent>
                               </Tooltip>
 
-                              <ConfirmDialog
-                                title="Delete Container"
-                                description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
-                                onConfirm={() => handleDeleteContainer(
-                                  container.id,
-                                  container.container_no || 'Unnamed Container'
-                                )}
-                                confirmText="Delete"
-                                cancelText="Cancel"
-                                variant="destructive"
-                                trigger={
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <ConfirmDialog
+                                    title="Delete Container"
+                                    description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
+                                    onConfirm={() =>
+                                      handleDeleteContainer(container.id, container.container_no || 'Unnamed Container')
+                                    }
+                                    confirmText="Delete"
+                                    cancelText="Cancel"
+                                    variant="destructive"
+                                    trigger={
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -921,13 +938,13 @@ export default function ContainersPage() {
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Delete Container</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                }
-                              />
+                                    }
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Delete Container</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </TooltipProvider>
                           </div>
                         </TableCell>

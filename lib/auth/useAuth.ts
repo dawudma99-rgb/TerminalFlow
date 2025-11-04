@@ -1,6 +1,6 @@
 "use client";
 import { logger } from '@/lib/utils/logger'
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -12,12 +12,14 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  logger.info('[useAuth] Hook mounted')
+
   useEffect(() => {
     logger.log('[useAuth] profile updated', profile?.current_list_id)
   }, [profile?.current_list_id])
 
   useEffect(() => {
-    logger.log("[useAuth] Initializing...");
+    logger.info("[useAuth] Initializing...");
     async function load() {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -40,6 +42,7 @@ export function useAuth() {
         }
 
         const currentUser = session.user;
+        logger.info('[useAuth] user data:', currentUser)
         setUser(currentUser);
         logger.log("[useAuth] Signed in as:", currentUser.email);
 
@@ -49,6 +52,7 @@ export function useAuth() {
           .eq("id", currentUser.id)
           .maybeSingle();
 
+        logger.info('[useAuth] profile data:', p)
         setProfile(p ?? null);
       } catch (e) {
         logger.error("[useAuth] Error:", e);
@@ -72,5 +76,31 @@ export function useAuth() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  return { user, profile, loading } as const;
+  const refreshProfile = useCallback(async () => {
+    if (!user?.id) {
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        logger.error("[useAuth] Error refreshing profile:", error);
+        return;
+      }
+
+      if (data) {
+        setProfile(data);
+        logger.log("[useAuth] Profile refreshed");
+      }
+    } catch (e) {
+      logger.error("[useAuth] Error refreshing profile:", e);
+    }
+  }, [user?.id]);
+
+  return { user, profile, loading, refreshProfile } as const;
 }
