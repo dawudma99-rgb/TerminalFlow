@@ -90,12 +90,10 @@ function AddContainerTrigger({ reload }: { reload?: () => Promise<void> }) {
       }
 
       await insertContainer(containerData as ContainerInsert)
-      console.log('[CreateContainer] Created in DB, reloading containers...')
       if (reload) {
         await reload()
       }
       toast.success('Container added successfully!')
-      logger.log('Container added successfully!')
     } catch (error) {
       logger.error('Error adding container:', error)
       toast.error('Failed to add container. Please try again.')
@@ -296,15 +294,6 @@ function EditContainerDialog({
 
 export default function ContainersPage() {
   const { activeListId } = useListsContext()
-  
-  useEffect(() => {
-    logger.log("[ContainersPage] activeListId:", activeListId)
-  }, [activeListId])
-  
-  useEffect(() => {
-    logger.log("COMPONENT: containers/page.tsx loaded")
-  }, [])
-  
   const { containers, loading, error, reload } = useContainers(activeListId)
   
   const [editingContainer, setEditingContainer] = useState<ContainerRecordWithComputed | null>(null)
@@ -357,12 +346,12 @@ export default function ContainersPage() {
     }
   }, [containers, loading])
 
-  // Force immediate render when containers become available
+  // Force immediate render when containers become available (only when not loading)
   useEffect(() => {
-    if (containers?.length && visibleCount === 0) {
+    if (!loading && containers?.length && visibleCount === 0) {
       setVisibleCount(Math.min(50, containers.length))
     }
-  }, [containers, visibleCount])
+  }, [containers, visibleCount, loading])
 
   // Handle manual refresh
   const handleRefresh = async () => {
@@ -383,7 +372,6 @@ export default function ContainersPage() {
   const handleDeleteContainer = async (containerId: string, containerNo: string) => {
     try {
       await deleteContainer(containerId)
-      console.log('[DeleteContainer] Deleted from DB, reloading containers...')
       await reload()
       toast.success(`Container "${containerNo}" deleted successfully`)
     } catch (error) {
@@ -593,386 +581,387 @@ export default function ContainersPage() {
           </div>
         )}
 
-        {containers.length === 0 && !loading ? (
-          <EmptyState
-            title="No containers found"
-            description="Get started by adding your first container to track its status and manage operations."
-            icon={<Container className="h-12 w-12 text-muted-foreground" />}
-            action={<AddContainerTrigger reload={reload} />}
-          />
-        ) : (
-          <>
-            {/* Last Updated & Refresh Controls - Above Stats Cards */}
-            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  Last updated: {timeAgo}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing || loading}
-                  className="h-8 w-8 p-0"
-                  aria-label="Refresh containers"
-                >
-                  <RefreshCcw 
-                    className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} 
-                  />
-                </Button>
-              </div>
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="mb-6">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-sm font-medium text-foreground">View Mode:</span>
-                <ToggleGroup 
-                  type="single" 
-                  value={viewMode} 
-                  onValueChange={(value) => {
-                    if (value === 'demurrage' || value === 'detention' || value === 'both') {
-                      setViewMode(value)
-                    }
-                  }}
-                  className="border border-border rounded-md p-1"
-                >
-                  <ToggleGroupItem value="demurrage" aria-label="Demurrage">
-                    Demurrage
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="detention" aria-label="Detention">
-                    Detention
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="both" aria-label="Both">
-                    Both
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-            </div>
-
-            {/* Stats Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-              {/* Total */}
-              <Card className="border-border bg-card">
-                <CardContent className="p-4">
-                  <div className="text-sm font-medium text-muted-foreground mb-1">Total</div>
-                  <div className="text-2xl font-bold text-foreground">{stats.total}</div>
-                </CardContent>
-              </Card>
-
-              {/* Open */}
-              <Card className="border-blue-200 bg-blue-50/30">
-                <CardContent className="p-4">
-                  <div className="text-sm font-medium text-blue-700 mb-1">Open</div>
-                  <div className="text-2xl font-bold text-blue-900">{stats.open}</div>
-                </CardContent>
-              </Card>
-
-              {/* Closed */}
-              <Card className="border-slate-200 bg-slate-50/30">
-                <CardContent className="p-4">
-                  <div className="text-sm font-medium text-slate-700 mb-1">Closed</div>
-                  <div className="text-2xl font-bold text-slate-900">{stats.closed}</div>
-                </CardContent>
-              </Card>
-
-              {/* Overdue */}
-              <Card className="border-red-200 bg-red-50/30">
-                <CardContent className="p-4">
-                  <div className="text-sm font-medium text-red-700 mb-1">Overdue</div>
-                  <div className="text-2xl font-bold text-red-900">{stats.overdue}</div>
-                </CardContent>
-              </Card>
-
-              {/* Safe */}
-              <Card className="border-green-200 bg-green-50/30">
-                <CardContent className="p-4">
-                  <div className="text-sm font-medium text-green-700 mb-1">Safe</div>
-                  <div className="text-2xl font-bold text-green-900">{stats.safe}</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Filter Toolbar */}
-            <div className="bg-white rounded-lg shadow-sm border border-border p-4 mb-4">
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                {/* Search Input */}
-                <div className="flex-1 w-full sm:w-auto min-w-[200px]">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Search containers..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                {/* Status Filter */}
-                <div className="w-full sm:w-[160px]">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="Closed">Closed</SelectItem>
-                      <SelectItem value="Safe">Safe</SelectItem>
-                      <SelectItem value="Warning">Warning</SelectItem>
-                      <SelectItem value="Overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Owner Filter */}
-                <div className="w-full sm:w-[180px]">
-                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Owner" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Owners</SelectItem>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {uniqueOwners.map((owner) => (
-                        <SelectItem key={owner} value={owner}>
-                          {owner}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Clear Filters Button */}
-                {hasActiveFilters && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleClearFilters}
-                    className="flex items-center gap-2"
-                  >
-                    <X className="h-4 w-4" />
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
-
-              {/* Filter Results Count */}
-              {hasActiveFilters && (
-                <div className="mt-3 text-sm text-muted-foreground">
-                  Showing {filteredContainers.length} of {containers.length} containers
-                </div>
-              )}
-            </div>
-
-            {/* Table */}
-            {filteredContainers.length === 0 ? (
-              <div className="bg-white rounded-lg shadow-sm border border-border p-12 text-center">
-                <Container className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  No containers match your filters
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Try adjusting your search or filter criteria.
-                </p>
-                {hasActiveFilters && (
-                  <Button variant="outline" onClick={handleClearFilters}>
-                    Clear All Filters
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <motion.div
-                className="bg-white rounded-lg shadow-sm border border-border overflow-hidden"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
-                key={lastUpdated}
+        {/* Last Updated & Refresh Controls - Above Stats Cards */}
+        {!loading && (
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Last updated: {timeAgo}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing || loading}
+                className="h-8 w-8 p-0"
+                aria-label="Refresh containers"
               >
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Container No</TableHead>
-                      <TableHead>Port</TableHead>
-                      <TableHead>Assigned To</TableHead>
-                      <TableHead>Carrier</TableHead>
-                      {/* Demurrage columns - hide in detention view */}
-                      {viewMode !== 'detention' && (
-                        <>
-                          <TableHead>Arrival Date</TableHead>
-                          <TableHead className="text-center">Free Days</TableHead>
-                          <TableHead className="text-center">Days Left</TableHead>
-                          <TableHead className="text-center">Demurrage Fee</TableHead>
-                        </>
-                      )}
-                      {/* Detention columns - hide in demurrage view */}
-                      {viewMode !== 'demurrage' && (
-                        <>
-                          <TableHead>Gate Out Date</TableHead>
-                          <TableHead className="text-center">Detention Free Days</TableHead>
-                          <TableHead className="text-center">Detention Fee Rate</TableHead>
-                        </>
-                      )}
-                      <TableHead className="text-center">Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleContainers.map((container) => (
-                      <TableRow key={container.id}>
-                        <TableCell className="font-mono font-medium">
-                          {container.container_no || '—'}
-                        </TableCell>
-                        <TableCell>{container.port || '—'}</TableCell>
-                        <TableCell>
-                          {container.assigned_to || (
-                            <span className="text-muted-foreground italic">Unassigned</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{container.carrier || '—'}</TableCell>
-                        {/* Demurrage columns - hide in detention view */}
-                        {viewMode !== 'detention' && (
-                          <>
-                            <TableCell>{formatDate(container.arrival_date)}</TableCell>
-                            <TableCell className="text-center">
-                              {container.free_days ?? '—'}
-                            </TableCell>
-                            <TableCell
-                              className={clsx(
-                                'text-center font-medium',
-                                container.days_left != null && container.days_left < 0
-                                  ? 'text-destructive'
-                                  : container.days_left != null && container.days_left <= 2
-                                  ? 'text-warning'
-                                  : 'text-foreground'
-                              )}
-                            >
-                              {container.days_left ?? '—'}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {container.demurrage_fee_if_late != null 
-                                ? `£${container.demurrage_fee_if_late.toFixed(2)}` 
-                                : '—'}
-                            </TableCell>
-                          </>
-                        )}
-                        {/* Detention columns - hide in demurrage view */}
-                        {viewMode !== 'demurrage' && (
-                          <>
-                            <TableCell>{formatDate(container.gate_out_date)}</TableCell>
-                            <TableCell className="text-center">
-                              {container.detention_free_days ?? '—'}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {container.detention_fee_rate != null 
-                                ? `£${container.detention_fee_rate.toFixed(2)}` 
-                                : '—'}
-                            </TableCell>
-                          </>
-                        )}
-                        <TableCell className="text-center">
-                          <StatusBadge status={container.status} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setEditingContainer(container)}
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Edit Container</p>
-                                </TooltipContent>
-                              </Tooltip>
+                <RefreshCcw 
+                  className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} 
+                />
+              </Button>
+            </div>
+          </div>
+        )}
 
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleToggleContainerStatus(container.id, container.is_closed)}
-                                    className={clsx(
-                                      "h-8 w-8 p-0",
-                                      container.is_closed
-                                        ? "text-success hover:text-success hover:bg-success/10"
-                                        : "text-muted-foreground hover:text-foreground"
-                                    )}
-                                  >
-                                    {container.is_closed ? (
-                                      <Unlock className="h-4 w-4" />
-                                    ) : (
-                                      <Lock className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{container.is_closed ? 'Reopen Container' : 'Close Container'}</p>
-                                </TooltipContent>
-                              </Tooltip>
+        {/* View Mode Toggle */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-sm font-medium text-foreground">View Mode:</span>
+            <ToggleGroup 
+              type="single" 
+              value={viewMode} 
+              onValueChange={(value) => {
+                if (value === 'demurrage' || value === 'detention' || value === 'both') {
+                  setViewMode(value)
+                }
+              }}
+              className="border border-border rounded-md p-1"
+            >
+              <ToggleGroupItem value="demurrage" aria-label="Demurrage">
+                Demurrage
+              </ToggleGroupItem>
+              <ToggleGroupItem value="detention" aria-label="Detention">
+                Detention
+              </ToggleGroupItem>
+              <ToggleGroupItem value="both" aria-label="Both">
+                Both
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        </div>
 
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <ConfirmDialog
-                                    title="Delete Container"
-                                    description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
-                                    onConfirm={() =>
-                                      handleDeleteContainer(container.id, container.container_no || 'Unnamed Container')
-                                    }
-                                    confirmText="Delete"
-                                    cancelText="Cancel"
-                                    variant="destructive"
-                                    trigger={
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    }
-                                  />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Delete Container</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                
-                {/* Loading indicator */}
-                {hasMore && (
-                  <div className="flex items-center justify-center py-6 border-t border-border">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {visibleContainers.length} of {filteredContainers.length} containers
-                    </div>
-                  </div>
-                )}
-                
-                {/* End of list indicator */}
-                {!hasMore && filteredContainers.length > 0 && (
-                  <div className="flex items-center justify-center py-4 border-t border-border">
-                    <div className="text-sm text-muted-foreground">
-                      All {filteredContainers.length} containers loaded
-                    </div>
-                  </div>
-                )}
-              </motion.div>
+        {/* Stats Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+          {/* Total */}
+          <Card className="border-border bg-card">
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-muted-foreground mb-1">Total</div>
+              <div className="text-2xl font-bold text-foreground">{stats.total}</div>
+            </CardContent>
+          </Card>
+
+          {/* Open */}
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-blue-700 mb-1">Open</div>
+              <div className="text-2xl font-bold text-blue-900">{stats.open}</div>
+            </CardContent>
+          </Card>
+
+          {/* Closed */}
+          <Card className="border-slate-200 bg-slate-50/30">
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-slate-700 mb-1">Closed</div>
+              <div className="text-2xl font-bold text-slate-900">{stats.closed}</div>
+            </CardContent>
+          </Card>
+
+          {/* Overdue */}
+          <Card className="border-red-200 bg-red-50/30">
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-red-700 mb-1">Overdue</div>
+              <div className="text-2xl font-bold text-red-900">{stats.overdue}</div>
+            </CardContent>
+          </Card>
+
+          {/* Safe */}
+          <Card className="border-green-200 bg-green-50/30">
+            <CardContent className="p-4">
+              <div className="text-sm font-medium text-green-700 mb-1">Safe</div>
+              <div className="text-2xl font-bold text-green-900">{stats.safe}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter Toolbar */}
+        <div className="bg-white rounded-lg shadow-sm border border-border p-4 mb-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {/* Search Input */}
+            <div className="flex-1 w-full sm:w-auto min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search containers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="w-full sm:w-[160px]">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="Closed">Closed</SelectItem>
+                  <SelectItem value="Safe">Safe</SelectItem>
+                  <SelectItem value="Warning">Warning</SelectItem>
+                  <SelectItem value="Overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Owner Filter */}
+            <div className="w-full sm:w-[180px]">
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Owners</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {uniqueOwners.map((owner) => (
+                    <SelectItem key={owner} value={owner}>
+                      {owner}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Clear Filters Button */}
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearFilters}
+                className="flex items-center gap-2"
+              >
+                <X className="h-4 w-4" />
+                Clear Filters
+              </Button>
             )}
-          </>
+          </div>
+
+          {/* Filter Results Count */}
+          {hasActiveFilters && (
+            <div className="mt-3 text-sm text-muted-foreground">
+              Showing {filteredContainers.length} of {containers.length} containers
+            </div>
+          )}
+        </div>
+
+        {/* Content Area - Conditionally Renders Loading, Empty, or Table */}
+        {loading ? (
+          <LoadingState message="Loading containers..." />
+        ) : containers.length === 0 ? (
+          <div className="w-full [&>div>div]:items-start [&>div>div]:justify-start [&>div>div]:text-left [&>div>div>h3]:text-xl [&>div>div>h3]:font-semibold">
+            <EmptyState
+              title="No containers found"
+              description="Get started by adding your first container to track its status and manage operations."
+              icon={<Container className="h-12 w-12 text-muted-foreground" />}
+            />
+          </div>
+        ) : filteredContainers.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm border border-border p-12 text-center">
+            <Container className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              No containers match your filters
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Try adjusting your search or filter criteria.
+            </p>
+            {hasActiveFilters && (
+              <Button variant="outline" onClick={handleClearFilters}>
+                Clear All Filters
+              </Button>
+            )}
+          </div>
+        ) : (
+          <motion.div
+            className="bg-white rounded-lg shadow-sm border border-border overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            key={lastUpdated}
+          >
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Container No</TableHead>
+                  <TableHead>Port</TableHead>
+                  <TableHead>Assigned To</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  {/* Demurrage columns - hide in detention view */}
+                  {viewMode !== 'detention' && (
+                    <>
+                      <TableHead>Arrival Date</TableHead>
+                      <TableHead className="text-center">Free Days</TableHead>
+                      <TableHead className="text-center">Days Left</TableHead>
+                      <TableHead className="text-center">Demurrage Fee</TableHead>
+                    </>
+                  )}
+                  {/* Detention columns - hide in demurrage view */}
+                  {viewMode !== 'demurrage' && (
+                    <>
+                      <TableHead>Gate Out Date</TableHead>
+                      <TableHead className="text-center">Detention Free Days</TableHead>
+                      <TableHead className="text-center">Detention Fee Rate</TableHead>
+                    </>
+                  )}
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleContainers.map((container) => (
+                  <TableRow key={container.id}>
+                    <TableCell className="font-mono font-medium">
+                      {container.container_no || '—'}
+                    </TableCell>
+                    <TableCell>{container.port || '—'}</TableCell>
+                    <TableCell>
+                      {container.assigned_to || (
+                        <span className="text-muted-foreground italic">Unassigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{container.carrier || '—'}</TableCell>
+                    {/* Demurrage columns - hide in detention view */}
+                    {viewMode !== 'detention' && (
+                      <>
+                        <TableCell>{formatDate(container.arrival_date)}</TableCell>
+                        <TableCell className="text-center">
+                          {container.free_days ?? '—'}
+                        </TableCell>
+                        <TableCell
+                          className={clsx(
+                            'text-center font-medium',
+                            container.days_left != null && container.days_left < 0
+                              ? 'text-destructive'
+                              : container.days_left != null && container.days_left <= 2
+                              ? 'text-warning'
+                              : 'text-foreground'
+                          )}
+                        >
+                          {container.days_left ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {container.demurrage_fee_if_late != null 
+                            ? `£${container.demurrage_fee_if_late.toFixed(2)}` 
+                            : '—'}
+                        </TableCell>
+                      </>
+                    )}
+                    {/* Detention columns - hide in demurrage view */}
+                    {viewMode !== 'demurrage' && (
+                      <>
+                        <TableCell>{formatDate(container.gate_out_date)}</TableCell>
+                        <TableCell className="text-center">
+                          {container.detention_free_days ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {container.detention_fee_rate != null 
+                            ? `£${container.detention_fee_rate.toFixed(2)}` 
+                            : '—'}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell className="text-center">
+                      <StatusBadge status={container.status} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingContainer(container)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Edit Container</p>
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleContainerStatus(container.id, container.is_closed)}
+                                className={clsx(
+                                  "h-8 w-8 p-0",
+                                  container.is_closed
+                                    ? "text-success hover:text-success hover:bg-success/10"
+                                    : "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                {container.is_closed ? (
+                                  <Unlock className="h-4 w-4" />
+                                ) : (
+                                  <Lock className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{container.is_closed ? 'Reopen Container' : 'Close Container'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <ConfirmDialog
+                                title="Delete Container"
+                                description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
+                                onConfirm={() =>
+                                  handleDeleteContainer(container.id, container.container_no || 'Unnamed Container')
+                                }
+                                confirmText="Delete"
+                                cancelText="Cancel"
+                                variant="destructive"
+                                trigger={
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Delete Container</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            
+            {/* Loading indicator */}
+            {hasMore && (
+              <div className="flex items-center justify-center py-6 border-t border-border">
+                <div className="text-sm text-muted-foreground">
+                  Showing {visibleContainers.length} of {filteredContainers.length} containers
+                </div>
+              </div>
+            )}
+            
+            {/* End of list indicator */}
+            {!hasMore && filteredContainers.length > 0 && (
+              <div className="flex items-center justify-center py-4 border-t border-border">
+                <div className="text-sm text-muted-foreground">
+                  All {filteredContainers.length} containers loaded
+                </div>
+              </div>
+            )}
+          </motion.div>
         )}
 
         <EditContainerDialog
