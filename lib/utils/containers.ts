@@ -4,6 +4,8 @@
  * No Supabase, no UI, no side effects — fully type-safe and reusable.
  */
 
+const DEBUG = false
+
 import { calculateTieredFees, type Tier } from '@/lib/tierUtils'
 
 export type ContainerStatus = 'Safe' | 'Warning' | 'Overdue' | 'Closed'
@@ -79,25 +81,29 @@ export function computeDerivedFields(c: ContainerRecord) {
   let demurrage_fees = 0
   if (days_left !== null && days_left < 0) {
     const daysOverdue = Math.abs(days_left)
-    console.log('[computeDerivedFields:demurrage] BEFORE calculateTieredFees', {
-      containerId: c.id,
-      containerNo: (c as any).container_no,
-      carrier: (c as any).carrier,
-      days_left,
-      daysOverdue,
-      demurrage_tiers: (c as any).demurrage_tiers,
-      demurrage_fee_if_late: c.demurrage_fee_if_late
-    })
+    if (DEBUG && process.env.NODE_ENV === 'development') {
+      console.log('[computeDerivedFields:demurrage] BEFORE calculateTieredFees', {
+        containerId: c.id,
+        containerNo: (c as any).container_no,
+        carrier: (c as any).carrier,
+        days_left,
+        daysOverdue,
+        demurrage_tiers: (c as any).demurrage_tiers,
+        demurrage_fee_if_late: c.demurrage_fee_if_late
+      })
+    }
     demurrage_fees = calculateTieredFees(
       daysOverdue,
       (c as any).demurrage_tiers as Tier[] | undefined,
       c.demurrage_fee_if_late ?? undefined
     )
-    console.log('[computeDerivedFields:demurrage] RESULT', {
-      containerId: c.id,
-      containerNo: (c as any).container_no,
-      demurrage_fees
-    })
+    if (DEBUG && process.env.NODE_ENV === 'development') {
+      console.log('[computeDerivedFields:demurrage] RESULT', {
+        containerId: c.id,
+        containerNo: (c as any).container_no,
+        demurrage_fees
+      })
+    }
   }
   
   // --- DETENTION CALCULATION ---
@@ -120,20 +126,25 @@ export function computeDerivedFields(c: ContainerRecord) {
         )
       }
 
-      console.log('[computeDerivedFields:detention]', {
-        containerId: c.id,
-        gateOut,
-        emptyReturn,
-        detentionFreeDays,
-        totalDays,
-        detentionDays,
-        detention_tiers: (c as any).detention_tiers,
-        detention_fees
-      })
+      if (DEBUG && process.env.NODE_ENV === 'development') {
+        console.log('[computeDerivedFields:detention]', {
+          containerId: c.id,
+          gateOut,
+          emptyReturn,
+          detentionFreeDays,
+          totalDays,
+          detentionDays,
+          detention_tiers: (c as any).detention_tiers,
+          detention_fees
+        })
+      }
     }
   }
   
-  console.log('[computeDerivedFields]', c.id, { days_left, demurrage_fees, detention_fees })
+  // Removed verbose summary log - use DEBUG flag to re-enable if needed
+  // if (DEBUG && process.env.NODE_ENV === 'development') {
+  //   console.log('[computeDerivedFields]', c.id, { days_left, demurrage_fees, detention_fees })
+  // }
   
   return {
     ...c,

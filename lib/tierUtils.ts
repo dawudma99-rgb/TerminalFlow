@@ -6,6 +6,8 @@
  * without any DOM dependencies or side effects.
  */
 
+const DEBUG = false
+
 /**
  * Represents a single tier in a tiered rate structure
  */
@@ -42,24 +44,31 @@ export function calculateTieredFees(
   flatRate?: number
 ): number {
   // Debug: Log initial inputs
-  console.log('[TierCalc]', {
-    daysOverdue,
-    tiers,
-    flatRate,
-    hasTiers: Array.isArray(tiers) && tiers.length > 0,
-    tiersLength: Array.isArray(tiers) ? tiers.length : 0
-  })
+  if (DEBUG && process.env.NODE_ENV === 'development') {
+    console.log('[TierCalc]', {
+      daysOverdue,
+      tiers,
+      flatRate,
+      hasTiers: Array.isArray(tiers) && tiers.length > 0,
+      tiersLength: Array.isArray(tiers) ? tiers.length : 0
+    })
+  }
 
   // If no tiers, fallback to flat rate
   if (!Array.isArray(tiers) || tiers.length === 0) {
     const flatRateTotal = (daysOverdue > 0 && flatRate) ? daysOverdue * flatRate : 0
-    console.log('[TierCalc] Using flat rate', { daysOverdue, flatRate, total: flatRateTotal })
+    if (DEBUG && process.env.NODE_ENV === 'development') {
+      console.log('[TierCalc] Using flat rate', { daysOverdue, flatRate, total: flatRateTotal })
+    }
     return flatRateTotal
   }
 
   // Sort tiers by from_day to ensure proper processing order
   const sortedTiers = sortTiers(tiers)
-  console.log('[TierCalc] Sorted tiers', sortedTiers)
+  // Removed verbose sorted tiers log - redundant information
+  // if (DEBUG && process.env.NODE_ENV === 'development') {
+  //   console.log('[TierCalc] Sorted tiers', sortedTiers)
+  // }
 
   let total = 0
   let remainingDays = daysOverdue
@@ -77,22 +86,27 @@ export function calculateTieredFees(
     const daysInThisTier = Math.max(0, tierEnd - tierStart + 1)
     const subtotal = daysInThisTier * rate
 
-    console.log('[TierCalc:each-tier]', {
-      from,
-      to: to === Infinity ? 'Infinity' : to,
-      rate,
-      tierStart,
-      tierEnd,
-      daysInThisTier,
-      subtotal,
-      remainingDaysBefore: remainingDays
-    })
+    // Removed verbose per-tier log - use DEBUG flag to re-enable if needed
+    // if (DEBUG && process.env.NODE_ENV === 'development') {
+    //   console.log('[TierCalc:each-tier]', {
+    //     from,
+    //     to: to === Infinity ? 'Infinity' : to,
+    //     rate,
+    //     tierStart,
+    //     tierEnd,
+    //     daysInThisTier,
+    //     subtotal,
+    //     remainingDaysBefore: remainingDays
+    //   })
+    // }
 
     total += subtotal
     remainingDays -= daysInThisTier
   }
 
-  console.log('[TierCalc] TOTAL =', total, { daysOverdue, remainingDays })
+  if (DEBUG && process.env.NODE_ENV === 'development') {
+    console.log('[TierCalc] TOTAL =', total, { daysOverdue, remainingDays })
+  }
   return total
 }
 

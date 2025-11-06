@@ -428,29 +428,29 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         }
       }}
     >
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
-            <Package className="h-5 w-5 text-primary" />
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="flex items-center gap-2 text-2xl font-semibold">
+            <Package className="h-6 w-6 text-primary" />
             Add New Container
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="px-6 py-6 space-y-6">
           {/* 1️⃣ Basic Information */}
-          <Card className="border-blue-200 bg-blue-50/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-blue-700 text-lg">
-                <Info className="h-4 w-4" />
+          <Card className="border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Info className="h-4 w-4 text-muted-foreground" />
                 Basic Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                  <label htmlFor="container_no" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="container_no" className="text-sm font-medium">
                     Container Number *
-                  </label>
+                  </Label>
                   <Input
                     id="container_no"
                     value={formData.container_no}
@@ -466,17 +466,17 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       }
                     }}
                     placeholder="e.g., ABCD1234567"
-                    className={`bg-background ${validationErrors.container_no ? 'border-destructive' : ''}`}
+                    className={validationErrors.container_no ? 'border-destructive' : ''}
                   />
                   {validationErrors.container_no && (
-                    <p className="text-sm text-destructive">{validationErrors.container_no}</p>
+                    <p className="text-sm text-destructive mt-1">{validationErrors.container_no}</p>
                   )}
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="port" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="port" className="text-sm font-medium">
                     Port *
-                  </label>
+                  </Label>
                   <Input
                     id="port"
                     value={formData.port}
@@ -492,17 +492,17 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       }
                     }}
                     placeholder="e.g., Los Angeles"
-                    className={`bg-background ${validationErrors.port ? 'border-destructive' : ''}`}
+                    className={validationErrors.port ? 'border-destructive' : ''}
                   />
                   {validationErrors.port && (
-                    <p className="text-sm text-destructive">{validationErrors.port}</p>
+                    <p className="text-sm text-destructive mt-1">{validationErrors.port}</p>
                   )}
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="arrival_date" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="arrival_date" className="text-sm font-medium">
                     Arrival Date *
-                  </label>
+                  </Label>
                   <Input
                     id="arrival_date"
                     type="date"
@@ -518,29 +518,28 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         })
                       }
                     }}
-                    className={`bg-background ${validationErrors.arrival_date ? 'border-destructive' : ''}`}
+                    className={validationErrors.arrival_date ? 'border-destructive' : ''}
                   />
                   {validationErrors.arrival_date && (
-                    <p className="text-sm text-destructive">{validationErrors.arrival_date}</p>
+                    <p className="text-sm text-destructive mt-1">{validationErrors.arrival_date}</p>
                   )}
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="free_days" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="free_days" className="text-sm font-medium">
                     Free Days
-                  </label>
+                  </Label>
                   <Input
                     id="free_days"
                     type="number"
                     value={formData.free_days}
                     onChange={(e) => handleInputChange('free_days', parseInt(e.target.value) || 7)}
                     min="1"
-                    className="bg-background"
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="carrier" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="carrier" className="text-sm font-medium">
                     Carrier
                   </Label>
                   <Select
@@ -550,7 +549,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       await loadCarrierDefaults(carrier)
                     }}
                   >
-                    <SelectTrigger id="carrier" className="w-full bg-background">
+                    <SelectTrigger id="carrier" className="w-full">
                       <SelectValue placeholder="Select a carrier" />
                     </SelectTrigger>
                     <SelectContent>
@@ -564,24 +563,26 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                 </div>
                 
                 <div className="space-y-2">
-                  <label htmlFor="container_size" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="container_size" className="text-sm font-medium">
                     Container Size
-                  </label>
-                  <select
-                    id="container_size"
+                  </Label>
+                  <Select
                     value={formData.container_size}
-                    onChange={(e) => handleInputChange('container_size', e.target.value)}
-                    className="w-full border border-input rounded-md px-3 py-2 bg-background text-foreground"
+                    onValueChange={(value) => handleInputChange('container_size', value)}
                   >
-                    <option value="">Select size</option>
-                    <option value="20ft">20ft</option>
-                    <option value="40ft">40ft</option>
-                    <option value="45ft">45ft</option>
-                  </select>
+                    <SelectTrigger id="container_size" className="w-full">
+                      <SelectValue placeholder="Select size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="20ft">20ft</SelectItem>
+                      <SelectItem value="40ft">40ft</SelectItem>
+                      <SelectItem value="45ft">45ft</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="assigned_to" className="text-sm font-medium text-foreground">
+                  <Label htmlFor="assigned_to" className="text-sm font-medium">
                     Assigned To
                   </Label>
                   <Input
@@ -590,7 +591,6 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     placeholder="Person or email"
                     value={formData.assigned_to}
                     onChange={(e) => handleInputChange('assigned_to', e.target.value)}
-                    className="bg-background"
                   />
                 </div>
               </div>
@@ -598,35 +598,35 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
           </Card>
 
           {/* 2️⃣ Demurrage Tracking */}
-          <Card className="border-orange-200 bg-orange-50/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-orange-700 text-lg">
-                <DollarSign className="h-4 w-4" />
+          <Card className="border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
                 Demurrage Tracking
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
+            <CardContent className="space-y-5">
+              <div className="flex items-center space-x-3">
                 <input
                   type="checkbox"
                   id="demurrage_enabled"
                   checked={formData.demurrage_enabled}
                   onChange={(e) => handleInputChange('demurrage_enabled', e.target.checked)}
-                  className="rounded border-input"
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
                 />
-                <label htmlFor="demurrage_enabled" className="text-sm font-medium text-foreground">
+                <Label htmlFor="demurrage_enabled" className="text-sm font-medium cursor-pointer">
                   Enable demurrage tracking
-                </label>
+                </Label>
               </div>
               
               {formData.demurrage_enabled && (
-                <div className="space-y-4">
+                <div className="space-y-5 pt-2 border-t">
                   <div className="space-y-2">
-                    <label htmlFor="demurrage_flat_rate" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="demurrage_flat_rate" className="text-sm font-medium">
                       Flat Rate (per day)
-                    </label>
+                    </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-2 text-muted-foreground">£</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">£</span>
                       <Input
                         id="demurrage_flat_rate"
                         type="number"
@@ -634,7 +634,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         onChange={(e) => handleInputChange('demurrage_flat_rate', parseFloat(e.target.value) || 0)}
                         min="0"
                         step="0.01"
-                        className="bg-background pl-8"
+                        className="pl-8"
                         placeholder="0.00"
                       />
                     </div>
@@ -642,25 +642,21 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   
                   {/* Carrier Defaults Info Banner */}
                   {carrierDefaultsLoaded && (
-                    <div className="col-span-full">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
-                        <Info className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm text-blue-700">
-                          Loaded tier defaults for {formData.carrier}
-                        </span>
-                      </div>
+                    <div className="bg-blue-50/50 border border-blue-200 rounded-md p-3 flex items-center gap-2">
+                      <Info className="h-4 w-4 text-blue-600 shrink-0" />
+                      <span className="text-sm text-blue-700">
+                        Loaded tier defaults for {formData.carrier}
+                      </span>
                     </div>
                   )}
 
                   {/* Loading indicator for carrier defaults */}
                   {loadingDefaults && (
-                    <div className="col-span-full">
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-2">
-                        <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></div>
-                        <span className="text-sm text-gray-600">
-                          Loading defaults for {formData.carrier}...
-                        </span>
-                      </div>
+                    <div className="bg-muted/50 border border-border rounded-md p-3 flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                      <span className="text-sm text-muted-foreground">
+                        Loading defaults for {formData.carrier}...
+                      </span>
                     </div>
                   )}
 
@@ -675,7 +671,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   
                   {/* Quick-save button for both tiers */}
                   {formData.carrier && (
-                    <div className="pt-2">
+                    <div className="pt-2 border-t">
                       <Button
                         variant="outline"
                         size="sm"
@@ -712,8 +708,19 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                           }
                         }}
                         disabled={savingDefaults || !formData.carrier}
+                        className="w-full sm:w-auto"
                       >
-                        💾 Save as Default
+                        {savingDefaults ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <span className="mr-2">💾</span>
+                            Save as Default
+                          </>
+                        )}
                       </Button>
                     </div>
                   )}
@@ -723,32 +730,32 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
           </Card>
 
           {/* 3️⃣ Detention Tracking */}
-          <Card className="border-green-200 bg-green-50/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-green-700 text-lg">
-                <Clock className="h-4 w-4" />
+          <Card className="border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Clock className="h-4 w-4 text-muted-foreground" />
                 Detention Tracking
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
+            <CardContent className="space-y-5">
+              <div className="flex items-center space-x-3">
                 <input
                   type="checkbox"
                   id="detention_enabled"
                   checked={formData.detention_enabled}
                   onChange={(e) => handleInputChange('detention_enabled', e.target.checked)}
-                  className="rounded border-input"
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
                 />
-                <label htmlFor="detention_enabled" className="text-sm font-medium text-foreground">
+                <Label htmlFor="detention_enabled" className="text-sm font-medium cursor-pointer">
                   Enable detention tracking
-                </label>
+                </Label>
               </div>
               
               {formData.detention_enabled && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-5 pt-2 border-t">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
-                      <Label htmlFor="gate_out_date" className="text-sm font-medium text-foreground">
+                      <Label htmlFor="gate_out_date" className="text-sm font-medium">
                         Gate-Out Date
                       </Label>
                       <Input
@@ -756,12 +763,11 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         type="date"
                         value={formData.gate_out_date}
                         onChange={(e) => handleInputChange('gate_out_date', e.target.value)}
-                        className="bg-background"
                       />
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="empty_return_date" className="text-sm font-medium text-foreground">
+                      <Label htmlFor="empty_return_date" className="text-sm font-medium">
                         Empty Return Date
                       </Label>
                       <Input
@@ -769,17 +775,16 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         type="date"
                         value={formData.empty_return_date}
                         onChange={(e) => handleInputChange('empty_return_date', e.target.value)}
-                        className="bg-background"
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <label htmlFor="detention_flat_rate" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="detention_flat_rate" className="text-sm font-medium">
                       Flat Rate (per day)
-                    </label>
+                    </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-2 text-muted-foreground">£</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">£</span>
                       <Input
                         id="detention_flat_rate"
                         type="number"
@@ -787,7 +792,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         onChange={(e) => handleInputChange('detention_flat_rate', parseFloat(e.target.value) || 0)}
                         min="0"
                         step="0.01"
-                        className="bg-background pl-8"
+                        className="pl-8"
                         placeholder="0.00"
                       />
                     </div>
@@ -807,24 +812,24 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
           </Card>
 
           {/* 4️⃣ Additional Notes */}
-          <Card className="border-gray-200 bg-gray-50/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-gray-700 text-lg">
-                <FileText className="h-4 w-4" />
+          <Card className="border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <FileText className="h-4 w-4 text-muted-foreground" />
                 Additional Notes
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <label htmlFor="notes" className="text-sm font-medium text-foreground">
+                <Label htmlFor="notes" className="text-sm font-medium">
                   Notes
-                </label>
+                </Label>
                 <textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => handleInputChange('notes', e.target.value)}
                   rows={4}
-                  className="w-full border border-input rounded-md px-3 py-2 bg-background text-foreground resize-none"
+                  className="w-full border border-input rounded-md px-3 py-2 bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   placeholder="Additional notes about this container..."
                 />
               </div>
@@ -833,30 +838,31 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         </div>
 
         {/* Footer Actions */}
-        <Separator className="my-6" />
-        <div className="flex justify-end gap-3">
-          <Button
-            variant="outline"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-            className="px-6"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isSubmitting || !formData.container_no || !formData.port || !formData.arrival_date}
-            className="px-6 bg-primary hover:bg-primary/90"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Container'
-            )}
-          </Button>
+        <div className="px-6 py-4 border-t bg-muted/30">
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isSubmitting}
+              className="min-w-[100px]"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSubmitting || !formData.container_no || !formData.port || !formData.arrival_date}
+              className="min-w-[140px]"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Container'
+              )}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

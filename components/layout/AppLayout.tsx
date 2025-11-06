@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, memo } from 'react'
 import dynamic from 'next/dynamic'
 import { Sidebar } from './Sidebar'
 
@@ -13,7 +13,8 @@ interface AppLayoutProps {
   children: ReactNode
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+// Memoized to prevent unnecessary re-renders that cascade to Topbar
+export const AppLayout = memo(function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <div className="flex">
@@ -27,4 +28,4 @@ export function AppLayout({ children }: AppLayoutProps) {
       </div>
     </div>
   )
-}
+})

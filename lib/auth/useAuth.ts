@@ -12,7 +12,10 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  logger.info('[useAuth] Hook mounted')
+  // ✅ Log only on mount (no repeated console spam)
+  useEffect(() => {
+    logger.info('[useAuth] Hook mounted')
+  }, [])
 
   useEffect(() => {
     logger.log('[useAuth] profile updated', profile?.current_list_id)

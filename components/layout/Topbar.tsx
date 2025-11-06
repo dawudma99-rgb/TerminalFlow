@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { signOut } from '@/lib/auth/actions'
 import { useAuth } from '@/lib/auth/useAuth'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { getOrganization } from '@/lib/data/user-actions'
 import { useTheme } from 'next-themes'
 import { LogOut, Moon, Sun } from 'lucide-react'
 
-export function Topbar() {
+// Memoized to prevent unnecessary re-renders that trigger useAuth calls
+export const Topbar = memo(function Topbar() {
   const { user, profile, loading } = useAuth()
   const [orgName, setOrgName] = useState('')
   const { theme, setTheme } = useTheme()
@@ -73,4 +74,4 @@ export function Topbar() {
       </div>
     </header>
   )
-}
+})

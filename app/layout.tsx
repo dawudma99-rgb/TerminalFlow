@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorHandlerProvider } from "@/components/ErrorHandlerProvider";
 import { ListsProvider } from "@/components/providers/ListsProvider";
 import { Toaster } from "sonner";
+import GlobalErrorBoundary from "./error-boundary";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,19 +25,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <ErrorHandlerProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <ListsProvider>
-              {children}
-              <Toaster position="top-right" richColors />
-            </ListsProvider>
-          </ThemeProvider>
-        </ErrorHandlerProvider>
+        <GlobalErrorBoundary>
+          <ErrorHandlerProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <ListsProvider>
+                {children}
+                <Toaster position="top-right" richColors />
+              </ListsProvider>
+            </ThemeProvider>
+          </ErrorHandlerProvider>
+        </GlobalErrorBoundary>
       </body>
     </html>
   );

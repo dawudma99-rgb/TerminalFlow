@@ -8,26 +8,11 @@ import { useListsContext } from '@/components/providers/ListsProvider'
 import { ListSwitcher } from '@/components/lists/ListSwitcher'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { AddContainerForm } from '@/components/forms/AddContainerForm'
 import { Card, CardContent } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -43,24 +28,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import clsx from 'clsx'
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, Edit, Trash2, Lock, Unlock, Container, Search, X, RefreshCcw } from 'lucide-react'
+import { Plus, Container } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Tier } from '@/lib/tierUtils'
 import type { ContainerUpdate } from '@/lib/data/containers-actions'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@/components/ui/toggle-group'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useDebounce } from 'use-debounce'
+import { ContainerTable } from './components/ContainerTable'
+import { FilterToolbar } from './components/FilterToolbar'
 
 function AddContainerTrigger({ reload }: { reload?: () => Promise<void> }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -139,31 +115,6 @@ function AddContainerTrigger({ reload }: { reload?: () => Promise<void> }) {
   )
 }
 
-function formatDate(dateString?: string | null): string {
-  if (!dateString) return '—'
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  } catch {
-    return dateString
-  }
-}
-
-function StatusBadge({ status }: { status?: string | null }) {
-  const badgeClass = clsx(
-    status === 'Safe' && 'bg-success text-success-foreground',
-    status === 'Warning' && 'bg-warning text-warning-foreground',
-    status === 'Overdue' && 'bg-destructive text-destructive-foreground',
-    status === 'Closed' && 'bg-muted text-muted-foreground',
-    !status && 'bg-muted text-muted-foreground'
-  )
-
-  return (
-    <Badge className={badgeClass}>
-      {status || 'N/A'}
-    </Badge>
-  )
-}
 
 function EditContainerDialog({
   container,
@@ -390,21 +341,21 @@ export default function ContainersPage() {
     }
   }
 
-  const handleDeleteContainer = async (containerId: string, containerNo: string) => {
+  const handleDeleteContainer = async (container: ContainerRecordWithComputed) => {
     try {
-      await deleteContainer(containerId)
+      await deleteContainer(container.id)
       await reload()
-      toast.success(`Container "${containerNo}" deleted successfully`)
+      toast.success(`Container "${container.container_no || 'Unnamed Container'}" deleted successfully`)
     } catch (error) {
       logger.error('Error deleting container:', error)
       toast.error('Failed to delete container. Please try again.')
     }
   }
 
-  const handleToggleContainerStatus = async (containerId: string, isCurrentlyClosed: boolean) => {
+  const handleToggleContainerStatus = async (container: ContainerRecordWithComputed) => {
     try {
-      await updateContainer(containerId, { is_closed: !isCurrentlyClosed })
-      toast.success(`Container ${isCurrentlyClosed ? 'reopened' : 'closed'} successfully`)
+      await updateContainer(container.id, { is_closed: !container.is_closed })
+      toast.success(`Container ${container.is_closed ? 'reopened' : 'closed'} successfully`)
     } catch (error) {
       logger.error('Error updating container status:', error)
       toast.error('Failed to update container status. Please try again.')
@@ -615,55 +566,6 @@ export default function ContainersPage() {
           </div>
         )}
 
-        {/* Last Updated & Refresh Controls - Above Stats Cards */}
-        {!loading && (
-          <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                Last updated: {timeAgo}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={isRefreshing || loading}
-                className="h-8 w-8 p-0"
-                aria-label="Refresh containers"
-              >
-                <RefreshCcw 
-                  className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} 
-                />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* View Mode Toggle */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-sm font-medium text-foreground">View Mode:</span>
-            <ToggleGroup 
-              type="single" 
-              value={viewMode} 
-              onValueChange={(value) => {
-                if (value === 'demurrage' || value === 'detention' || value === 'both') {
-                  setViewMode(value)
-                }
-              }}
-              className="border border-border rounded-md p-1"
-            >
-              <ToggleGroupItem value="demurrage" aria-label="Demurrage">
-                Demurrage
-              </ToggleGroupItem>
-              <ToggleGroupItem value="detention" aria-label="Detention">
-                Detention
-              </ToggleGroupItem>
-              <ToggleGroupItem value="both" aria-label="Both">
-                Both
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-        </div>
 
         {/* Stats Bar */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
@@ -709,78 +611,25 @@ export default function ContainersPage() {
         </div>
 
         {/* Filter Toolbar */}
-        <div className="bg-white rounded-lg shadow-sm border border-border p-4 mb-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            {/* Search Input */}
-            <div className="flex-1 w-full sm:w-auto min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search containers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            {/* Status Filter */}
-            <div className="w-full sm:w-[160px]">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="Closed">Closed</SelectItem>
-                  <SelectItem value="Safe">Safe</SelectItem>
-                  <SelectItem value="Warning">Warning</SelectItem>
-                  <SelectItem value="Overdue">Overdue</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Owner Filter */}
-            <div className="w-full sm:w-[180px]">
-              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Owner" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Owners</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {uniqueOwners.map((owner) => (
-                    <SelectItem key={owner} value={owner}>
-                      {owner}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Clear Filters Button */}
-            {hasActiveFilters && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClearFilters}
-                className="flex items-center gap-2"
-              >
-                <X className="h-4 w-4" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
-
-          {/* Filter Results Count */}
-          {hasActiveFilters && (
-            <div className="mt-3 text-sm text-muted-foreground">
-              Showing {filteredContainers.length} of {containers.length} containers
-            </div>
-          )}
-        </div>
+        <FilterToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilter={statusFilter}
+          onStatusChange={setStatusFilter}
+          ownerFilter={ownerFilter}
+          onOwnerChange={setOwnerFilter}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onClearFilters={handleClearFilters}
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
+          owners={uniqueOwners}
+          hasActiveFilters={hasActiveFilters}
+          filteredCount={filteredContainers.length}
+          totalCount={containers.length}
+          timeAgo={timeAgo}
+          loading={loading}
+        />
 
         {/* Content Area - Conditionally Renders Loading, Empty, or Table */}
         {loading ? (
@@ -816,177 +665,13 @@ export default function ContainersPage() {
             transition={{ duration: 0.3 }}
             key={lastUpdated}
           >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Container No</TableHead>
-                  <TableHead>Port</TableHead>
-                  <TableHead>Assigned To</TableHead>
-                  <TableHead>Carrier</TableHead>
-                  {/* Demurrage columns - hide in detention view */}
-                  {viewMode !== 'detention' && (
-                    <>
-                      <TableHead>Arrival Date</TableHead>
-                      <TableHead className="text-center">Free Days</TableHead>
-                      <TableHead className="text-center">Days Left</TableHead>
-                      <TableHead className="text-center">Demurrage Fee</TableHead>
-                    </>
-                  )}
-                  {/* Detention columns - hide in demurrage view */}
-                  {viewMode !== 'demurrage' && (
-                    <>
-                      <TableHead>Gate Out Date</TableHead>
-                      <TableHead className="text-center">Detention Free Days</TableHead>
-                      <TableHead className="text-center">Detention Fee Rate</TableHead>
-                    </>
-                  )}
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleContainers.map((container) => (
-                  <TableRow key={container.id}>
-                    <TableCell className="font-mono font-medium">
-                      {container.container_no || '—'}
-                    </TableCell>
-                    <TableCell>{container.port || '—'}</TableCell>
-                    <TableCell>
-                      {container.assigned_to || (
-                        <span className="text-muted-foreground italic">Unassigned</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{container.carrier || '—'}</TableCell>
-                    {/* Demurrage columns - hide in detention view */}
-                    {viewMode !== 'detention' && (
-                      <>
-                        <TableCell>{formatDate(container.arrival_date)}</TableCell>
-                        <TableCell className="text-center">
-                          {container.free_days ?? '—'}
-                        </TableCell>
-                        <TableCell
-                          className={clsx(
-                            'text-center font-medium',
-                            container.days_left != null && container.days_left < 0
-                              ? 'text-destructive'
-                              : container.days_left != null && container.days_left <= 2
-                              ? 'text-warning'
-                              : 'text-foreground'
-                          )}
-                        >
-                          {container.days_left ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-center font-medium">
-                          {container.days_left != null && container.days_left < 0 && container.demurrage_fees
-                            ? `£${container.demurrage_fees.toLocaleString()}`
-                            : container.demurrage_fee_if_late != null
-                              ? `£${container.demurrage_fee_if_late.toFixed(2)}/day`
-                              : '—'}
-                          {Array.isArray(container.demurrage_tiers) && container.demurrage_tiers.length > 0 && (
-                            <span className="ml-1 text-xs text-muted-foreground">(tiered)</span>
-                          )}
-                        </TableCell>
-                      </>
-                    )}
-                    {/* Detention columns - hide in demurrage view */}
-                    {viewMode !== 'demurrage' && (
-                      <>
-                        <TableCell>{formatDate(container.gate_out_date)}</TableCell>
-                        <TableCell className="text-center">
-                          {container.detention_free_days ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-center font-medium">
-                          {container.days_left != null && container.days_left < 0 && container.detention_fees
-                            ? `£${container.detention_fees.toLocaleString()}`
-                            : container.detention_fee_rate != null
-                              ? `£${container.detention_fee_rate.toFixed(2)}/day`
-                              : '—'}
-                          {Array.isArray(container.detention_tiers) && container.detention_tiers.length > 0 && (
-                            <span className="ml-1 text-xs text-muted-foreground">(tiered)</span>
-                          )}
-                        </TableCell>
-                      </>
-                    )}
-                    <TableCell className="text-center">
-                      <StatusBadge status={container.status} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingContainer(container)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Edit Container</p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleContainerStatus(container.id, container.is_closed)}
-                                className={clsx(
-                                  "h-8 w-8 p-0",
-                                  container.is_closed
-                                    ? "text-success hover:text-success hover:bg-success/10"
-                                    : "text-muted-foreground hover:text-foreground"
-                                )}
-                              >
-                                {container.is_closed ? (
-                                  <Unlock className="h-4 w-4" />
-                                ) : (
-                                  <Lock className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{container.is_closed ? 'Reopen Container' : 'Close Container'}</p>
-                            </TooltipContent>
-                          </Tooltip>
-
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <ConfirmDialog
-                                title="Delete Container"
-                                description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
-                                onConfirm={() =>
-                                  handleDeleteContainer(container.id, container.container_no || 'Unnamed Container')
-                                }
-                                confirmText="Delete"
-                                cancelText="Cancel"
-                                variant="destructive"
-                                trigger={
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                }
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Delete Container</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <ContainerTable
+              containers={visibleContainers}
+              viewMode={viewMode}
+              onEdit={(container) => setEditingContainer(container)}
+              onDelete={handleDeleteContainer}
+              onToggleStatus={handleToggleContainerStatus}
+            />
             
             {/* Loading indicator */}
             {hasMore && (
