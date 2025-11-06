@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useContainers } from '@/lib/data/useContainers'
 import { insertContainer, updateContainer, deleteContainer, type ContainerInsert, type ContainerUpdate, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
+import type { Json } from '@/types/database'
 import { useListsContext } from '@/components/providers/ListsProvider'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
@@ -29,23 +30,41 @@ function AddContainerTrigger() {
     free_days: number
     carrier: string
     container_size: string
+    assigned_to: string
     demurrage_enabled: boolean
     demurrage_flat_rate: number
     demurrage_tiers: Tier[]
     detention_enabled: boolean
     detention_flat_rate: number
     detention_tiers: Tier[]
+    gate_out_date: string
+    empty_return_date: string
     notes: string
   }) => {
     try {
+      // Normalize date fields: empty string -> null
+      const normalizeDate = (dateStr: string): string | null => {
+        return dateStr.trim() === '' ? null : dateStr
+      }
+
       const containerData = {
         container_no: data.container_no,
         port: data.port,
-        arrival_date: data.arrival_date,
+        arrival_date: normalizeDate(data.arrival_date),
         free_days: data.free_days,
         carrier: data.carrier || null,
         container_size: data.container_size || null,
         notes: data.notes || null,
+        assigned_to: data.assigned_to || null,
+        gate_out_date: normalizeDate(data.gate_out_date),
+        empty_return_date: normalizeDate(data.empty_return_date),
+        demurrage_tiers: data.demurrage_enabled && data.demurrage_tiers?.length > 0
+          ? (data.demurrage_tiers as unknown as Json)
+          : null,
+        detention_tiers: data.detention_enabled && data.detention_tiers?.length > 0
+          ? (data.detention_tiers as unknown as Json)
+          : null,
+        has_detention: data.detention_enabled,
       }
 
       await insertContainer(containerData as ContainerInsert)

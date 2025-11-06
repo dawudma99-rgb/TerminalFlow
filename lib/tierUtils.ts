@@ -41,34 +41,59 @@ export function calculateTieredFees(
   tiers?: Tier[], 
   flatRate?: number
 ): number {
+  // Debug: Log initial inputs
+  console.log('[TierCalc]', {
+    daysOverdue,
+    tiers,
+    flatRate,
+    hasTiers: Array.isArray(tiers) && tiers.length > 0,
+    tiersLength: Array.isArray(tiers) ? tiers.length : 0
+  })
+
   // If no tiers, fallback to flat rate
   if (!Array.isArray(tiers) || tiers.length === 0) {
-    return (daysOverdue > 0 && flatRate) ? daysOverdue * flatRate : 0;
+    const flatRateTotal = (daysOverdue > 0 && flatRate) ? daysOverdue * flatRate : 0
+    console.log('[TierCalc] Using flat rate', { daysOverdue, flatRate, total: flatRateTotal })
+    return flatRateTotal
   }
 
   // Sort tiers by from_day to ensure proper processing order
-  const sortedTiers = sortTiers(tiers);
+  const sortedTiers = sortTiers(tiers)
+  console.log('[TierCalc] Sorted tiers', sortedTiers)
 
-  let total = 0;
-  let remainingDays = daysOverdue;
+  let total = 0
+  let remainingDays = daysOverdue
 
   for (const tier of sortedTiers) {
-    if (remainingDays <= 0) break;
+    if (remainingDays <= 0) break
 
-    const from = tier.from_day ?? 1;
-    const to = tier.to_day ?? Infinity;
-    const rate = Number(tier.rate ?? 0);
+    const from = tier.from_day ?? 1
+    const to = tier.to_day ?? Infinity
+    const rate = Number(tier.rate ?? 0)
 
     // Calculate overlap between this tier range and remaining overdue days
-    const tierStart = Math.max(from, 1);
-    const tierEnd = Math.min(to, daysOverdue);
-    const daysInThisTier = Math.max(0, tierEnd - tierStart + 1);
+    const tierStart = Math.max(from, 1)
+    const tierEnd = Math.min(to, daysOverdue)
+    const daysInThisTier = Math.max(0, tierEnd - tierStart + 1)
+    const subtotal = daysInThisTier * rate
 
-    total += daysInThisTier * rate;
-    remainingDays -= daysInThisTier;
+    console.log('[TierCalc:each-tier]', {
+      from,
+      to: to === Infinity ? 'Infinity' : to,
+      rate,
+      tierStart,
+      tierEnd,
+      daysInThisTier,
+      subtotal,
+      remainingDaysBefore: remainingDays
+    })
+
+    total += subtotal
+    remainingDays -= daysInThisTier
   }
 
-  return total;
+  console.log('[TierCalc] TOTAL =', total, { daysOverdue, remainingDays })
+  return total
 }
 
 /**

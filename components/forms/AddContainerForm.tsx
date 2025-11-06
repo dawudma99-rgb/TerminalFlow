@@ -26,15 +26,100 @@ import { Loader2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { Database } from '@/types/database'
 
-// UK carrier presets with standard demurrage/detention rates
+// UK carrier presets with realistic tiered demurrage/detention rates.
+// Note: Day 1 = first chargeable day (arrival date + free days).
 const UK_CARRIER_PRESETS = {
-  'Maersk': { dem: 90, det: 75, freeDays: 5 },
-  'MSC': { dem: 85, det: 70, freeDays: 5 },
-  'CMA-CGM': { dem: 88, det: 72, freeDays: 6 },
-  'Hapag-Lloyd': { dem: 92, det: 78, freeDays: 5 },
-  'Evergreen': { dem: 87, det: 69, freeDays: 6 },
-  'ONE': { dem: 91, det: 74, freeDays: 5 },
-  'OOCL': { dem: 89, det: 70, freeDays: 5 },
+  'MSC': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 5, rate: 85 },
+      { from_day: 6, to_day: 10, rate: 125 },
+      { from_day: 11, to_day: 999, rate: 175 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 5, rate: 70 },
+      { from_day: 6, to_day: 10, rate: 100 },
+      { from_day: 11, to_day: 999, rate: 140 }
+    ],
+    freeDays: 7
+  },
+  'CMA-CGM': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 6, rate: 88 },
+      { from_day: 7, to_day: 12, rate: 132 },
+      { from_day: 13, to_day: 999, rate: 176 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 6, rate: 72 },
+      { from_day: 7, to_day: 12, rate: 108 },
+      { from_day: 13, to_day: 999, rate: 144 }
+    ],
+    freeDays: 7
+  },
+  'Maersk': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 5, rate: 90 },
+      { from_day: 6, to_day: 10, rate: 135 },
+      { from_day: 11, to_day: 999, rate: 180 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 5, rate: 75 },
+      { from_day: 6, to_day: 10, rate: 110 },
+      { from_day: 11, to_day: 999, rate: 150 }
+    ],
+    freeDays: 5
+  },
+  'Hapag-Lloyd': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 5, rate: 92 },
+      { from_day: 6, to_day: 10, rate: 138 },
+      { from_day: 11, to_day: 999, rate: 184 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 5, rate: 78 },
+      { from_day: 6, to_day: 10, rate: 115 },
+      { from_day: 11, to_day: 999, rate: 155 }
+    ],
+    freeDays: 5
+  },
+  'Evergreen': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 6, rate: 87 },
+      { from_day: 7, to_day: 12, rate: 130 },
+      { from_day: 13, to_day: 999, rate: 174 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 6, rate: 69 },
+      { from_day: 7, to_day: 12, rate: 104 },
+      { from_day: 13, to_day: 999, rate: 139 }
+    ],
+    freeDays: 6
+  },
+  'ONE': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 5, rate: 91 },
+      { from_day: 6, to_day: 10, rate: 136 },
+      { from_day: 11, to_day: 999, rate: 182 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 5, rate: 74 },
+      { from_day: 6, to_day: 10, rate: 111 },
+      { from_day: 11, to_day: 999, rate: 148 }
+    ],
+    freeDays: 5
+  },
+  'OOCL': {
+    demurrage_tiers: [
+      { from_day: 1, to_day: 5, rate: 89 },
+      { from_day: 6, to_day: 10, rate: 134 },
+      { from_day: 11, to_day: 999, rate: 179 }
+    ],
+    detention_tiers: [
+      { from_day: 1, to_day: 5, rate: 70 },
+      { from_day: 6, to_day: 10, rate: 105 },
+      { from_day: 11, to_day: 999, rate: 145 }
+    ],
+    freeDays: 5
+  }
 }
 
 const CARRIER_NAMES = Object.keys(UK_CARRIER_PRESETS)
@@ -53,6 +138,7 @@ interface ContainerFormData {
   free_days: number
   carrier: string
   container_size: string
+  assigned_to: string
   
   // Demurrage Tracking
   demurrage_enabled: boolean
@@ -63,6 +149,8 @@ interface ContainerFormData {
   detention_enabled: boolean
   detention_flat_rate: number
   detention_tiers: Tier[]
+  gate_out_date: string
+  empty_return_date: string
   
   // Additional Notes
   notes: string
@@ -77,12 +165,15 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
     free_days: 7,
     carrier: '',
     container_size: '',
+    assigned_to: '',
     demurrage_enabled: false,
     demurrage_flat_rate: 0,
     demurrage_tiers: [],
     detention_enabled: false,
     detention_flat_rate: 0,
     detention_tiers: [],
+    gate_out_date: '',
+    empty_return_date: '',
     notes: ''
   })
 
@@ -139,16 +230,12 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         toast.success(`Loaded saved defaults for ${carrier}`)
       } else {
         // Fallback to UK presets
+        // Free days are handled by the container; tiers define chargeable days only.
+        // Day 1 in the tier = first day after free period ends.
         const preset = UK_CARRIER_PRESETS[carrier as keyof typeof UK_CARRIER_PRESETS]
         if (preset) {
-          const fallbackDem: Tier[] = [
-            { from_day: 1, to_day: preset.freeDays, rate: 0 },
-            { from_day: preset.freeDays + 1, to_day: null, rate: preset.dem },
-          ]
-          const fallbackDet: Tier[] = [
-            { from_day: 1, to_day: preset.freeDays, rate: 0 },
-            { from_day: preset.freeDays + 1, to_day: null, rate: preset.det },
-          ]
+          const fallbackDem: Tier[] = preset.demurrage_tiers ?? []
+          const fallbackDet: Tier[] = preset.detention_tiers ?? []
           setFormData(prev => ({
             ...prev,
             demurrage_tiers: fallbackDem,
@@ -278,12 +365,15 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       free_days: 7,
       carrier: '',
       container_size: '',
+      assigned_to: '',
       demurrage_enabled: false,
       demurrage_flat_rate: 0,
       demurrage_tiers: [],
       detention_enabled: false,
       detention_flat_rate: 0,
       detention_tiers: [],
+      gate_out_date: '',
+      empty_return_date: '',
       notes: ''
     })
     setCarrierDefaultsLoaded(false)
@@ -489,6 +579,20 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     <option value="45ft">45ft</option>
                   </select>
                 </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="assigned_to" className="text-sm font-medium text-foreground">
+                    Assigned To
+                  </Label>
+                  <Input
+                    id="assigned_to"
+                    type="text"
+                    placeholder="Person or email"
+                    value={formData.assigned_to}
+                    onChange={(e) => handleInputChange('assigned_to', e.target.value)}
+                    className="bg-background"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -642,6 +746,34 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
               
               {formData.detention_enabled && (
                 <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="gate_out_date" className="text-sm font-medium text-foreground">
+                        Gate-Out Date
+                      </Label>
+                      <Input
+                        id="gate_out_date"
+                        type="date"
+                        value={formData.gate_out_date}
+                        onChange={(e) => handleInputChange('gate_out_date', e.target.value)}
+                        className="bg-background"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="empty_return_date" className="text-sm font-medium text-foreground">
+                        Empty Return Date
+                      </Label>
+                      <Input
+                        id="empty_return_date"
+                        type="date"
+                        value={formData.empty_return_date}
+                        onChange={(e) => handleInputChange('empty_return_date', e.target.value)}
+                        className="bg-background"
+                      />
+                    </div>
+                  </div>
+                  
                   <div className="space-y-2">
                     <label htmlFor="detention_flat_rate" className="text-sm font-medium text-foreground">
                       Flat Rate (per day)

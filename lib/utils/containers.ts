@@ -4,6 +4,8 @@
  * No Supabase, no UI, no side effects — fully type-safe and reusable.
  */
 
+import { calculateTieredFees, type Tier } from '@/lib/tierUtils'
+
 export type ContainerStatus = 'Safe' | 'Warning' | 'Overdue' | 'Closed'
 
 export interface ContainerRecord {
@@ -72,10 +74,73 @@ export function computeContainerStatus(c: ContainerRecord): ContainerStatus {
 export function computeDerivedFields(c: ContainerRecord) {
   const days_left = computeDaysLeft(c.arrival_date, c.free_days ?? 7)
   const status = computeContainerStatus(c)
+  
+  // Calculate demurrage fees if overdue
+  let demurrage_fees = 0
+  if (days_left !== null && days_left < 0) {
+    const daysOverdue = Math.abs(days_left)
+    console.log('[computeDerivedFields:demurrage] BEFORE calculateTieredFees', {
+      containerId: c.id,
+      containerNo: (c as any).container_no,
+      carrier: (c as any).carrier,
+      days_left,
+      daysOverdue,
+      demurrage_tiers: (c as any).demurrage_tiers,
+      demurrage_fee_if_late: c.demurrage_fee_if_late
+    })
+    demurrage_fees = calculateTieredFees(
+      daysOverdue,
+      (c as any).demurrage_tiers as Tier[] | undefined,
+      c.demurrage_fee_if_late ?? undefined
+    )
+    console.log('[computeDerivedFields:demurrage] RESULT', {
+      containerId: c.id,
+      containerNo: (c as any).container_no,
+      demurrage_fees
+    })
+  }
+  
+  // --- DETENTION CALCULATION ---
+  let detention_fees = 0
+  if (c.has_detention) {
+    const gateOut = c.gate_out_date ? new Date(c.gate_out_date) : null
+    const emptyReturn = c.empty_return_date ? new Date(c.empty_return_date) : null
+    const detentionFreeDays = c.detention_free_days ?? 7
+
+    if (gateOut) {
+      const endDate = emptyReturn || new Date()
+      const totalDays = Math.ceil((endDate.getTime() - gateOut.getTime()) / 86400000)
+      const detentionDays = totalDays - detentionFreeDays
+
+      if (detentionDays > 0) {
+        detention_fees = calculateTieredFees(
+          detentionDays,
+          (c as any).detention_tiers as Tier[] | undefined,
+          (c as any).detention_fee_rate ?? undefined
+        )
+      }
+
+      console.log('[computeDerivedFields:detention]', {
+        containerId: c.id,
+        gateOut,
+        emptyReturn,
+        detentionFreeDays,
+        totalDays,
+        detentionDays,
+        detention_tiers: (c as any).detention_tiers,
+        detention_fees
+      })
+    }
+  }
+  
+  console.log('[computeDerivedFields]', c.id, { days_left, demurrage_fees, detention_fees })
+  
   return {
     ...c,
     days_left,
-    status
+    status,
+    demurrage_fees,
+    detention_fees
   }
 }
 

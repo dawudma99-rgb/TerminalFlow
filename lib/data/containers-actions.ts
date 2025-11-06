@@ -14,6 +14,8 @@ export type ContainerUpdate = Database['public']['Tables']['containers']['Update
 export type ContainerRecordWithComputed = ContainerRecord & {
   days_left?: number | null
   status?: string
+  demurrage_fees?: number
+  detention_fees?: number
 }
 
 async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {

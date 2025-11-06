@@ -3,6 +3,7 @@
 import { logger } from '@/lib/utils/logger'
 import { useContainers } from '@/lib/data/useContainers'
 import { insertContainer, updateContainer, deleteContainer, type ContainerInsert, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
+import type { Json } from '@/types/database'
 import { useListsContext } from '@/components/providers/ListsProvider'
 import { ListSwitcher } from '@/components/lists/ListSwitcher'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -59,6 +60,7 @@ import {
 } from '@/components/ui/toggle-group'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useDebounce } from 'use-debounce'
 
 function AddContainerTrigger({ reload }: { reload?: () => Promise<void> }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -70,23 +72,41 @@ function AddContainerTrigger({ reload }: { reload?: () => Promise<void> }) {
     free_days: number
     carrier: string
     container_size: string
+    assigned_to: string
     demurrage_enabled: boolean
     demurrage_flat_rate: number
     demurrage_tiers: Tier[]
     detention_enabled: boolean
     detention_flat_rate: number
     detention_tiers: Tier[]
+    gate_out_date: string
+    empty_return_date: string
     notes: string
   }) => {
     try {
+      // Normalize date fields: empty string -> null
+      const normalizeDate = (dateStr: string): string | null => {
+        return dateStr.trim() === '' ? null : dateStr
+      }
+
       const containerData = {
         container_no: data.container_no,
         port: data.port,
-        arrival_date: data.arrival_date,
+        arrival_date: normalizeDate(data.arrival_date),
         free_days: data.free_days,
         carrier: data.carrier || null,
         container_size: data.container_size || null,
         notes: data.notes || null,
+        assigned_to: data.assigned_to || null,
+        gate_out_date: normalizeDate(data.gate_out_date),
+        empty_return_date: normalizeDate(data.empty_return_date),
+        demurrage_tiers: data.demurrage_enabled && data.demurrage_tiers?.length > 0
+          ? (data.demurrage_tiers as unknown as Json)
+          : null,
+        detention_tiers: data.detention_enabled && data.detention_tiers?.length > 0
+          ? (data.detention_tiers as unknown as Json)
+          : null,
+        has_detention: data.detention_enabled,
       }
 
       await insertContainer(containerData as ContainerInsert)
@@ -303,6 +323,7 @@ export default function ContainersPage() {
   
   // Filter state
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 300)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [viewMode, setViewMode] = useState<'demurrage' | 'detention' | 'both'>('both')
@@ -416,8 +437,8 @@ export default function ContainersPage() {
       // 'both' shows all containers, no filtering needed
 
       // Search filter (case-insensitive)
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase()
+      if (debouncedSearchQuery.trim()) {
+        const query = debouncedSearchQuery.toLowerCase()
         const matchesSearch =
           container.container_no?.toLowerCase().includes(query) ||
           container.port?.toLowerCase().includes(query) ||
@@ -449,7 +470,7 @@ export default function ContainersPage() {
       return true
     })
     return filtered
-  }, [containers, viewMode, searchQuery, statusFilter, ownerFilter])
+  }, [containers, viewMode, debouncedSearchQuery, statusFilter, ownerFilter])
 
   const handleClearFilters = () => {
     setSearchQuery('')
@@ -459,14 +480,27 @@ export default function ContainersPage() {
 
   const hasActiveFilters = searchQuery.trim() !== '' || statusFilter !== 'all' || ownerFilter !== 'all'
 
-  // Compute stats from filtered containers
+  // Compute stats from filtered containers (single-pass optimization)
   const stats = useMemo(() => {
+    let open = 0
+    let closed = 0
+    let overdue = 0
+    let safe = 0
+
+    for (const c of filteredContainers) {
+      if (c.is_closed) closed++
+      else open++
+
+      if (c.status === 'Overdue') overdue++
+      else if (c.status === 'Safe') safe++
+    }
+
     return {
       total: filteredContainers.length,
-      open: filteredContainers.filter(c => !c.is_closed).length,
-      closed: filteredContainers.filter(c => c.is_closed).length,
-      overdue: filteredContainers.filter(c => c.status === 'Overdue').length,
-      safe: filteredContainers.filter(c => c.status === 'Safe').length,
+      open,
+      closed,
+      overdue,
+      safe,
     }
   }, [filteredContainers])
   
@@ -842,10 +876,15 @@ export default function ContainersPage() {
                         >
                           {container.days_left ?? '—'}
                         </TableCell>
-                        <TableCell className="text-center">
-                          {container.demurrage_fee_if_late != null 
-                            ? `£${container.demurrage_fee_if_late.toFixed(2)}` 
-                            : '—'}
+                        <TableCell className="text-center font-medium">
+                          {container.days_left != null && container.days_left < 0 && container.demurrage_fees
+                            ? `£${container.demurrage_fees.toLocaleString()}`
+                            : container.demurrage_fee_if_late != null
+                              ? `£${container.demurrage_fee_if_late.toFixed(2)}/day`
+                              : '—'}
+                          {Array.isArray(container.demurrage_tiers) && container.demurrage_tiers.length > 0 && (
+                            <span className="ml-1 text-xs text-muted-foreground">(tiered)</span>
+                          )}
                         </TableCell>
                       </>
                     )}
@@ -856,10 +895,15 @@ export default function ContainersPage() {
                         <TableCell className="text-center">
                           {container.detention_free_days ?? '—'}
                         </TableCell>
-                        <TableCell className="text-center">
-                          {container.detention_fee_rate != null 
-                            ? `£${container.detention_fee_rate.toFixed(2)}` 
-                            : '—'}
+                        <TableCell className="text-center font-medium">
+                          {container.days_left != null && container.days_left < 0 && container.detention_fees
+                            ? `£${container.detention_fees.toLocaleString()}`
+                            : container.detention_fee_rate != null
+                              ? `£${container.detention_fee_rate.toFixed(2)}/day`
+                              : '—'}
+                          {Array.isArray(container.detention_tiers) && container.detention_tiers.length > 0 && (
+                            <span className="ml-1 text-xs text-muted-foreground">(tiered)</span>
+                          )}
                         </TableCell>
                       </>
                     )}
