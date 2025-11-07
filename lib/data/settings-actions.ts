@@ -47,7 +47,7 @@ export async function loadSettings(): Promise<Settings> {
     }
 
     return merged
-  } catch (_err) {
+  } catch {
     return {
       demurrageDailyRate: 80,
       detentionDailyRate: 50,

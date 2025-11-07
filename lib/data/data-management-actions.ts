@@ -2,6 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import type { Database } from '@/types/database'
+
+type ContainerInsert = Database['public']['Tables']['containers']['Insert']
 
 /**
  * Export all organization data (containers, history, profiles) as JSON.
@@ -94,17 +97,16 @@ export async function importOrgData(fileContent: string) {
   }
 
   // Map containers to include organization_id and remove any id conflicts
-  const containersToInsert = parsed.containers.map((c) => {
-    const { id, organization_id, ...rest } = c
-    return {
-      ...rest,
-      organization_id: orgId, // Ensure correct org scope
-    }
+  const containersToInsert: ContainerInsert[] = parsed.containers.map((raw) => {
+    const container = { ...(raw as ContainerInsert) }
+    delete container.id
+    container.organization_id = orgId
+    return container
   })
 
   const { error } = await supabase
     .from('containers')
-    .insert(containersToInsert as any[]) // Type assertion needed for dynamic container data
+    .insert(containersToInsert)
 
   if (error) throw new Error(`Failed to import containers: ${error.message}`)
   

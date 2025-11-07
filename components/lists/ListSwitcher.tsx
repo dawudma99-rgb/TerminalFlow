@@ -55,7 +55,7 @@ export function ListSwitcher() {
     }
   }
 
-  const handleDeleteList = async (listId: string, listName: string) => {
+const handleDeleteList = async (listId: string) => {
     try {
       await deleteList(listId)
       // Optimistically clear containers cache for deleted list
@@ -135,7 +135,7 @@ export function ListSwitcher() {
               <ConfirmDialog
                 title="Delete List"
                 description={`Are you sure you want to delete "${list.name}"? This action cannot be undone.`}
-                onConfirm={() => handleDeleteList(list.id, list.name)}
+                onConfirm={() => handleDeleteList(list.id)}
                 confirmText="Delete"
                 cancelText="Cancel"
                 variant="destructive"

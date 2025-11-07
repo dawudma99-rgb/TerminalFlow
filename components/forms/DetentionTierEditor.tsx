@@ -32,10 +32,9 @@ interface DetentionTierEditorProps {
   onSaveDefault?: () => void
   carrier?: string
   savingDefaults?: boolean
-  freeDays?: number
 }
 
-export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carrier, savingDefaults = false, freeDays = 0 }: DetentionTierEditorProps) {
+export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carrier, savingDefaults = false }: DetentionTierEditorProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [newTier, setNewTier] = useState<Tier>({ from_day: 1, to_day: null, rate: 0 })

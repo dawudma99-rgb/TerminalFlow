@@ -4,9 +4,11 @@ import { useSearchParams } from 'next/navigation'
 
 export function useClientSearchParams() {
   const params = useSearchParams()
+  const serializedParams = useMemo(() => params.toString(), [params])
   return useMemo(() => {
-    const entries = Array.from(params.entries())
+    const searchParams = new URLSearchParams(serializedParams)
+    const entries = Array.from(searchParams.entries())
     return Object.fromEntries(entries)
-  }, [params.toString()])
+  }, [serializedParams])
 }
 

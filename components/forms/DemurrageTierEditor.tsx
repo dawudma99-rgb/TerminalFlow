@@ -32,10 +32,9 @@ interface DemurrageTierEditorProps {
   onSaveDefault?: () => void
   carrier?: string
   savingDefaults?: boolean
-  freeDays?: number
 }
 
-export function DemurrageTierEditor({ tiers, onTiersChange, onSaveDefault, carrier, savingDefaults = false, freeDays = 0 }: DemurrageTierEditorProps) {
+export function DemurrageTierEditor({ tiers, onTiersChange, onSaveDefault, carrier, savingDefaults = false }: DemurrageTierEditorProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [newTier, setNewTier] = useState<Tier>({ from_day: 1, to_day: null, rate: 0 })

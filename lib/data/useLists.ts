@@ -10,7 +10,7 @@ import { logger } from '@/lib/utils/logger'
 import useSWR from 'swr'
 import { fetchLists, createList, deleteList, setActiveList, type ListRecord } from './lists-actions'
 import { useAuth } from '@/lib/auth/useAuth'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
 

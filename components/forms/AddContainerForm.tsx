@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { 
   Package, 
@@ -23,8 +22,6 @@ import { useAuth } from '@/lib/auth/useAuth'
 import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import type { Database } from '@/types/database'
 
 // UK carrier presets with realistic tiered demurrage/detention rates.
 // Note: Day 1 = first chargeable day (arrival date + free days).
@@ -666,7 +663,6 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     onSaveDefault={handleSaveDemurrageDefaults}
                     carrier={formData.carrier}
                     savingDefaults={savingDefaults}
-                    freeDays={formData.free_days}
                   />
                   
                   {/* Quick-save button for both tiers */}
@@ -804,7 +800,6 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     onSaveDefault={handleSaveDetentionDefaults}
                     carrier={formData.carrier}
                     savingDefaults={savingDefaults}
-                    freeDays={formData.free_days}
                   />
                 </div>
               )}

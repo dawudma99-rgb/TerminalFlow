@@ -6,7 +6,6 @@
  * List-aware: fetches containers for a specific list or all containers if listId is null.
  */
 
-import { logger } from '@/lib/utils/logger'
 import useSWR from 'swr'
 import { fetchContainers } from './containers-actions'
 import type { ContainerRecordWithComputed } from './containers-actions'

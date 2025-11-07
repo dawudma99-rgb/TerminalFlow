@@ -19,10 +19,45 @@ export interface CarrierDefaults {
   updated_at: string
 }
 
-export interface CarrierDefaultsData {
-  demurrage_tiers: Tier[]
-  detention_tiers: Tier[]
+interface PersistedTier {
+  from?: number | null
+  to?: number | null
+  from_day?: number | null
+  to_day?: number | null
+  rate?: number | null
 }
+
+export interface CarrierDefaultsData {
+  demurrage_tiers?: PersistedTier[]
+  detention_tiers?: PersistedTier[]
+}
+
+type CarrierDefaultsJson = Database['public']['Tables']['carrier_defaults']['Insert']['defaults']
+
+const toTier = (tier: PersistedTier | Tier): Tier => {
+  const persisted = tier as PersistedTier
+  const fromDay = typeof tier.from_day === 'number' ? tier.from_day : typeof persisted.from === 'number' ? persisted.from : 1
+  const toDay = tier.to_day !== undefined ? tier.to_day : persisted.to ?? null
+  const rate = typeof tier.rate === 'number' ? tier.rate : typeof persisted.rate === 'number' ? persisted.rate : 0
+
+  return {
+    from_day: fromDay,
+    to_day: toDay === undefined ? null : toDay,
+    rate,
+  }
+}
+
+const convertPersistedTiers = (tiers?: PersistedTier[] | Tier[]): Tier[] => {
+  if (!tiers) return []
+  return tiers.map((tier) => toTier(tier))
+}
+
+const normalizeTiers = (tiers: Tier[]): PersistedTier[] =>
+  tiers.map((tier) => ({
+    from: typeof tier.from_day === 'number' ? tier.from_day : 1,
+    to: tier.to_day ?? null,
+    rate: typeof tier.rate === 'number' ? tier.rate : 0,
+  }))
 
 /**
  * Get carrier defaults for a specific carrier and organization
@@ -48,16 +83,12 @@ export async function getCarrierDefaults(carrier: string, organizationId: string
     }
     throw new Error(`Supabase getCarrierDefaults error: ${error.message}`)
   }
-
-  // Parse the defaults JSON
-  const defaults = data.defaults as unknown as CarrierDefaultsData
-  
   return {
     id: data.id,
     organization_id: data.organization_id || '',
     carrier_name: data.carrier_name,
-    demurrage_tiers: defaults.demurrage_tiers || [],
-    detention_tiers: defaults.detention_tiers || [],
+    demurrage_tiers: convertPersistedTiers((data.defaults as CarrierDefaultsData | null)?.demurrage_tiers),
+    detention_tiers: convertPersistedTiers((data.defaults as CarrierDefaultsData | null)?.detention_tiers),
     updated_at: data.updated_at
   }
 }
@@ -81,24 +112,18 @@ export async function saveCarrierDefaults(
   const existing = await getCarrierDefaults(carrier, organizationId)
   
   // Normalize tier keys before saving to Supabase (from_day/to_day → from/to)
-  const normalizeTiers = (tiers: any[]): any[] =>
-    tiers.map((t) => ({
-      from: t.from ?? t.from_day ?? 1,
-      to: t.to ?? t.to_day ?? null,
-      rate: t.rate ?? 0,
-    }))
-  
   const defaultsData: CarrierDefaultsData = {
     demurrage_tiers: normalizeTiers(demurrageTiers),
     detention_tiers: normalizeTiers(detentionTiers),
   }
+  const defaultsJson = defaultsData as CarrierDefaultsJson
   
   if (existing) {
     // Update existing defaults
     const { data, error } = await supabase
       .from('carrier_defaults')
       .update({
-        defaults: defaultsData as unknown as Database['public']['Tables']['carrier_defaults']['Update']['defaults'],
+        defaults: defaultsJson,
         updated_at: new Date().toISOString()
       })
       .eq('id', existing.id)
@@ -126,7 +151,7 @@ export async function saveCarrierDefaults(
       .insert({
         organization_id: organizationId,
         carrier_name: carrier,
-        defaults: defaultsData as unknown as Database['public']['Tables']['carrier_defaults']['Insert']['defaults']
+        defaults: defaultsJson
       })
       .select()
       .single()
@@ -191,13 +216,13 @@ export async function getAllCarrierDefaults(organizationId: string): Promise<Car
   }
 
   return data.map(item => {
-    const defaults = item.defaults as unknown as CarrierDefaultsData
+    const defaults = item.defaults as CarrierDefaultsData | null
     return {
       id: item.id,
       organization_id: item.organization_id || '',
       carrier_name: item.carrier_name,
-      demurrage_tiers: defaults.demurrage_tiers || [],
-      detention_tiers: defaults.detention_tiers || [],
+      demurrage_tiers: convertPersistedTiers(defaults?.demurrage_tiers),
+      detention_tiers: convertPersistedTiers(defaults?.detention_tiers),
       updated_at: item.updated_at
     }
   })

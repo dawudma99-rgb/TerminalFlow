@@ -26,15 +26,6 @@ async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Pro
   return profile.organization_id
 }
 
-/**
- * Get the current authenticated user ID.
- */
-async function getUserId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  return user.id
-}
-
 // --- Read ---
 /**
  * Fetch all container lists for the current authenticated user's organization.

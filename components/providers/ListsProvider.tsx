@@ -18,7 +18,7 @@
 import { createContext, useContext, ReactNode } from 'react'
 import { useLists, type UseListsReturn } from '@/lib/data/useLists'
 
-interface ListsContextValue extends UseListsReturn {}
+type ListsContextValue = UseListsReturn
 
 const ListsContext = createContext<ListsContextValue | undefined>(undefined)
 
