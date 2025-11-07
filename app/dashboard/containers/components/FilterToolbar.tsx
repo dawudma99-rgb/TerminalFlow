@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -35,7 +36,8 @@ interface FilterToolbarProps {
   loading?: boolean
 }
 
-export function FilterToolbar({
+// ✅ Memoized: Prevents re-renders when unrelated props or parent state change
+export const FilterToolbar = memo(function FilterToolbar({
   searchQuery,
   onSearchChange,
   statusFilter,
@@ -54,6 +56,16 @@ export function FilterToolbar({
   timeAgo,
   loading = false,
 }: FilterToolbarProps) {
+  // Temporary render marker for performance verification (Phase 3-D)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Render] FilterToolbar', { 
+      searchQuery, 
+      statusFilter, 
+      ownerFilter, 
+      viewMode 
+    })
+  }
+
   return (
     <>
       {/* Last Updated & Refresh Controls */}
@@ -185,5 +197,5 @@ export function FilterToolbar({
       </div>
     </>
   )
-}
+})
 
