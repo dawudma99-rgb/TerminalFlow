@@ -7,6 +7,8 @@ import { getOrganization, updateProfile } from '@/lib/data/user-actions'
 import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 
 export default function ProfilePage() {
   const { user, profile, loading } = useAuth()
@@ -61,9 +63,11 @@ export default function ProfilePage() {
   if (loading || orgLoading) {
     return (
       <AppLayout>
-        <div className="flex h-full items-center justify-center">
-          <LoadingState message="Loading profile..." />
-        </div>
+        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+          <div className="flex h-full items-center justify-center">
+            <LoadingState message="Loading profile..." />
+          </div>
+        </main>
       </AppLayout>
     )
   }
@@ -71,34 +75,55 @@ export default function ProfilePage() {
   if (!user || !profile) {
     return (
       <AppLayout>
-        <div className="p-4">
-          <h1 className="text-lg font-semibold mb-2">Profile</h1>
-          <p className="text-gray-600">Please sign in to view your profile.</p>
-        </div>
+        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+          <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
+            Please sign in to view your profile.
+          </div>
+        </main>
       </AppLayout>
     )
   }
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
-        <h1 className="text-xl font-semibold mb-4">Profile</h1>
+      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <div className="mx-auto flex max-w-3xl flex-col gap-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold text-[#111827]">Profile</h1>
+                <p className="text-sm text-[#6B7280]">
+                  View your account details and organization assignment.
+                </p>
+              </div>
+              <Button onClick={handleSave} disabled={updating} className="w-full md:w-auto">
+                {updating ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
 
-        <div className="rounded-lg border p-4 bg-white shadow-sm">
-          <p><strong>User ID:</strong> {user.id}</p>
-          <p><strong>Email:</strong> {profile.email || user.email}</p>
-          <p><strong>Organization:</strong> {organization?.name || 'N/A'}</p>
-          <p><strong>Role:</strong> {profile.role || 'N/A'}</p>
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="grid gap-4 p-6 text-sm text-[#111827] md:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[#6B7280]">User ID</p>
+                <p className="mt-1 font-medium">{user.id}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[#6B7280]">Email</p>
+                <p className="mt-1 font-medium">{profile.email || user.email}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[#6B7280]">Organization</p>
+                <p className="mt-1 font-medium">{organization?.name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[#6B7280]">Role</p>
+                <p className="mt-1 font-medium">{profile.role || 'N/A'}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-
-        <button
-          onClick={handleSave}
-          disabled={updating}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-        >
-          {updating ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
+      </main>
     </AppLayout>
   )
 }

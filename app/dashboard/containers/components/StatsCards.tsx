@@ -1,67 +1,55 @@
 'use client'
 
-import { memo } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import clsx from 'clsx'
 
-interface StatsCardsProps {
-  stats: {
-    total: number
-    open: number
-    closed: number
-    overdue: number
-    safe: number
-  }
+interface StatsSummaryProps {
+  total: number
+  overdue: number
+  warning: number
+  safe: number
+  closed: number
+  updatedLabel?: string
 }
 
-// ✅ Memoized: Prevents re-renders when unrelated props or parent state change
-export const StatsCards = memo(function StatsCards({ stats }: StatsCardsProps) {
-  // Temporary render marker for performance verification (Phase 3-D)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Render] StatsCards', stats)
-  }
+const statusStyles: Record<string, string> = {
+  total: 'text-slate-700',
+  overdue: 'text-[#B91C1C]',
+  warning: 'text-[#B45309]',
+  safe: 'text-[#047857]',
+  closed: 'text-[#4B5563]',
+}
+
+export function StatsSummary({
+  total,
+  overdue,
+  warning,
+  safe,
+  closed,
+  updatedLabel,
+}: StatsSummaryProps) {
+  const items = [
+    { key: 'total', label: 'Total', value: total },
+    { key: 'overdue', label: 'Overdue', value: overdue },
+    { key: 'warning', label: 'Warning', value: warning },
+    { key: 'safe', label: 'Safe', value: safe },
+    { key: 'closed', label: 'Closed', value: closed },
+  ]
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-      {/* Total */}
-      <Card className="border-border bg-card">
-        <CardContent className="p-4">
-          <div className="text-sm font-medium text-muted-foreground mb-1">Total</div>
-          <div className="text-2xl font-bold text-foreground">{stats.total}</div>
-        </CardContent>
-      </Card>
-
-      {/* Open */}
-      <Card className="border-blue-200 bg-blue-50/30">
-        <CardContent className="p-4">
-          <div className="text-sm font-medium text-blue-700 mb-1">Open</div>
-          <div className="text-2xl font-bold text-blue-900">{stats.open}</div>
-        </CardContent>
-      </Card>
-
-      {/* Closed */}
-      <Card className="border-slate-200 bg-slate-50/30">
-        <CardContent className="p-4">
-          <div className="text-sm font-medium text-slate-700 mb-1">Closed</div>
-          <div className="text-2xl font-bold text-slate-900">{stats.closed}</div>
-        </CardContent>
-      </Card>
-
-      {/* Overdue */}
-      <Card className="border-red-200 bg-red-50/30">
-        <CardContent className="p-4">
-          <div className="text-sm font-medium text-red-700 mb-1">Overdue</div>
-          <div className="text-2xl font-bold text-red-900">{stats.overdue}</div>
-        </CardContent>
-      </Card>
-
-      {/* Safe */}
-      <Card className="border-green-200 bg-green-50/30">
-        <CardContent className="p-4">
-          <div className="text-sm font-medium text-green-700 mb-1">Safe</div>
-          <div className="text-2xl font-bold text-green-900">{stats.safe}</div>
-        </CardContent>
-      </Card>
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-[#D4D7DE] bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
+      {items.map((item, index) => (
+        <div key={item.key} className="flex items-center gap-1">
+          {index > 0 && <span className="text-[#CBD0D8]">•</span>}
+          <span className="uppercase tracking-[0.18em] text-[10px] text-slate-400">{item.label}</span>
+          <span className={clsx('font-semibold', statusStyles[item.key])}>{item.value}</span>
+        </div>
+      ))}
+      {updatedLabel && (
+        <>
+          <span className="text-[#CBD0D8]">•</span>
+          <span className="text-[11px] text-slate-400">{updatedLabel}</span>
+        </>
+      )}
     </div>
   )
-})
-
+}

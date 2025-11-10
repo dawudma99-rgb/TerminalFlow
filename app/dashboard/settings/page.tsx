@@ -220,9 +220,11 @@ export default function SettingsPage() {
   if (loading || settingsLoading) {
     return (
       <AppLayout>
-        <div className="flex h-full items-center justify-center">
-          <LoadingState message="Loading settings..." />
-        </div>
+        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+          <div className="flex h-full items-center justify-center">
+            <LoadingState message="Loading settings..." />
+          </div>
+        </main>
       </AppLayout>
     )
   }
@@ -230,29 +232,38 @@ export default function SettingsPage() {
   if (!user || !profile || !settings) {
     return (
       <AppLayout>
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-          Please sign in to view settings.
-        </div>
+        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+          <div className="mx-auto max-w-4xl rounded-lg border border-gray-200 bg-white p-6 text-sm text-muted-foreground shadow-sm">
+            Please sign in to view settings.
+          </div>
+        </main>
       </AppLayout>
     )
   }
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto space-y-6 p-6">
-        {/* Page Header */}
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <SettingsIcon className="h-8 w-8 text-primary" />
-            Settings & Configuration
-          </h1>
-          <p className="text-muted-foreground">
-            Manage your application preferences, fee defaults, and organization data.
-          </p>
-        </div>
+      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <div className="mx-auto flex max-w-4xl flex-col gap-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="flex items-center gap-2 text-2xl font-semibold text-[#111827]">
+                  <SettingsIcon className="h-6 w-6 text-[#2563EB]" />
+                  Settings & Configuration
+                </h1>
+                <p className="text-sm text-[#6B7280]">
+                  Manage fee defaults, carrier presets, and organization data controls.
+                </p>
+              </div>
+              <Button onClick={handleSaveSettings} disabled={saving} className="w-full md:w-auto">
+                {saving ? 'Saving…' : 'Save Settings'}
+              </Button>
+            </div>
+          </div>
 
         {/* Fee Configuration */}
-        <Card className="hover:shadow-md transition-shadow duration-300">
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
@@ -305,7 +316,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Free Days Configuration */}
-        <Card className="hover:shadow-md transition-shadow duration-300">
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
@@ -358,7 +369,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Weekend Charging */}
-        <Card className="hover:shadow-md transition-shadow duration-300">
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle>Weekend Charging</CardTitle>
           </CardHeader>
@@ -383,7 +394,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Carrier Defaults */}
-        <Card className="hover:shadow-md transition-shadow duration-300">
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
@@ -464,7 +475,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Data Management */}
-        <Card className="hover:shadow-md transition-shadow duration-300">
+        <Card className="border border-gray-200 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5 text-primary" />
@@ -535,104 +546,98 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <Button onClick={handleSaveSettings} disabled={saving} size="lg">
-            {saving ? 'Saving...' : '💾 Save Settings'}
-          </Button>
-        </div>
+        {/* Carrier Default Editor Modal */}
+        {editingCarrier && (
+          <AlertDialog open={!!editingCarrier} onOpenChange={(open) => {
+            if (!open) {
+              setEditingCarrier(null)
+              setEditingCarrierName('')
+              setDemurrageTiers([])
+              setDetentionTiers([])
+            }
+          }}>
+            <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Carrier Defaults: {editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
+                </AlertDialogTitle>
+              </AlertDialogHeader>
+              <AlertDialogDescription asChild>
+                <div className="space-y-6 p-2">
+                  {editingCarrier === 'new' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="carrierNameInput">Carrier Name</Label>
+                      <Input
+                        id="carrierNameInput"
+                        value={editingCarrierName}
+                        onChange={(e) => setEditingCarrierName(e.target.value)}
+                        placeholder="e.g., Maersk, MSC, CMA CGM"
+                        className="bg-background"
+                      />
+                    </div>
+                  )}
+                  <DemurrageTierEditor
+                    tiers={demurrageTiers}
+                    onTiersChange={setDemurrageTiers}
+                    carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
+                  />
+                  <DetentionTierEditor
+                    tiers={detentionTiers}
+                    onTiersChange={setDetentionTiers}
+                    carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
+                  />
+                </div>
+              </AlertDialogDescription>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => {
+                  setEditingCarrier(null)
+                  setEditingCarrierName('')
+                  setDemurrageTiers([])
+                  setDetentionTiers([])
+                }}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={savingCarrier || (editingCarrier === 'new' && !editingCarrierName.trim())}
+                  onClick={async () => {
+                    if (!profile?.organization_id) return
+                    if (editingCarrier === 'new' && !editingCarrierName.trim()) {
+                      toast.error('Please enter a carrier name')
+                      return
+                    }
+                    try {
+                      setSavingCarrier(true)
+                      const carrierName = editingCarrier === 'new' ? editingCarrierName.trim() : editingCarrierName
+                      await saveCarrierDefaults(
+                        carrierName,
+                        profile.organization_id,
+                        demurrageTiers,
+                        detentionTiers
+                      )
+                      toast.success(`Carrier defaults saved for ${carrierName}`)
+                      setEditingCarrier(null)
+                      setEditingCarrierName('')
+                      setDemurrageTiers([])
+                      setDetentionTiers([])
+                      const updated = await getAllCarrierDefaults(profile.organization_id)
+                      setCarrierDefaults(updated)
+                    } catch (err) {
+                      toast.error('Failed to save carrier defaults')
+                      logger.error('Failed to save carrier defaults:', err)
+                    } finally {
+                      setSavingCarrier(false)
+                    }
+                  }}
+                >
+                  {savingCarrier ? 'Saving...' : 'Save'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
-
-      {/* Carrier Default Editor Modal */}
-      {editingCarrier && (
-        <AlertDialog open={!!editingCarrier} onOpenChange={(open) => {
-          if (!open) {
-            setEditingCarrier(null)
-            setEditingCarrierName('')
-            setDemurrageTiers([])
-            setDetentionTiers([])
-          }
-        }}>
-          <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Carrier Defaults: {editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
-              </AlertDialogTitle>
-            </AlertDialogHeader>
-            <AlertDialogDescription asChild>
-              <div className="space-y-6 p-2">
-                {editingCarrier === 'new' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="carrierNameInput">Carrier Name</Label>
-                    <Input
-                      id="carrierNameInput"
-                      value={editingCarrierName}
-                      onChange={(e) => setEditingCarrierName(e.target.value)}
-                      placeholder="e.g., Maersk, MSC, CMA CGM"
-                      className="bg-background"
-                    />
-                  </div>
-                )}
-                <DemurrageTierEditor
-                  tiers={demurrageTiers}
-                  onTiersChange={setDemurrageTiers}
-                  carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
-                />
-                <DetentionTierEditor
-                  tiers={detentionTiers}
-                  onTiersChange={setDetentionTiers}
-                  carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
-                />
-              </div>
-            </AlertDialogDescription>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => {
-                setEditingCarrier(null)
-                setEditingCarrierName('')
-                setDemurrageTiers([])
-                setDetentionTiers([])
-              }}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                disabled={savingCarrier || (editingCarrier === 'new' && !editingCarrierName.trim())}
-                onClick={async () => {
-                  if (!profile?.organization_id) return
-                  if (editingCarrier === 'new' && !editingCarrierName.trim()) {
-                    toast.error('Please enter a carrier name')
-                    return
-                  }
-                  try {
-                    setSavingCarrier(true)
-                    const carrierName = editingCarrier === 'new' ? editingCarrierName.trim() : editingCarrierName
-                    await saveCarrierDefaults(
-                      carrierName,
-                      profile.organization_id,
-                      demurrageTiers,
-                      detentionTiers
-                    )
-                    toast.success(`Carrier defaults saved for ${carrierName}`)
-                    setEditingCarrier(null)
-                    setEditingCarrierName('')
-                    setDemurrageTiers([])
-                    setDetentionTiers([])
-                    const updated = await getAllCarrierDefaults(profile.organization_id)
-                    setCarrierDefaults(updated)
-                  } catch (err) {
-                    toast.error('Failed to save carrier defaults')
-                    logger.error('Failed to save carrier defaults:', err)
-                  } finally {
-                    setSavingCarrier(false)
-                  }
-                }}
-              >
-                {savingCarrier ? 'Saving...' : 'Save'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-    </AppLayout>
+    </main>
+  </AppLayout>
   )
 }
 

@@ -28,29 +28,36 @@ export const EmptyStates = memo(function EmptyStates({
 
   if (!hasContainers) {
     return (
-      <div className="w-full [&>div>div]:items-start [&>div>div]:justify-start [&>div>div]:text-left [&>div>div>h3]:text-xl [&>div>div>h3]:font-semibold">
-        <EmptyState
-          title="No containers found"
-          description="Get started by adding your first container to track its status and manage operations."
-          icon={<Container className="h-12 w-12 text-muted-foreground" />}
-        />
+      <div className="flex h-[360px] flex-col items-center justify-center rounded-md border border-dashed border-[#D4D7DE] bg-white text-center">
+        <Container className="mb-3 h-10 w-10 text-[#9CA3AF]" />
+        <h3 className="text-sm font-semibold text-slate-700 tracking-tight">
+          No containers yet
+        </h3>
+        <p className="mt-2 max-w-sm text-xs text-slate-500">
+          Import your first shipment or add an existing unit to begin monitoring demurrage and detention performance.
+        </p>
       </div>
     )
   }
 
   if (!hasFilteredContainers) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-border p-12 text-center">
-        <Container className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-foreground mb-2">
-          No containers match your filters
+      <div className="flex h-[280px] flex-col items-center justify-center rounded-md border border-dashed border-[#D4D7DE] bg-white text-center">
+        <Container className="mb-3 h-9 w-9 text-[#9CA3AF]" />
+        <h3 className="text-sm font-semibold text-slate-700 tracking-tight">
+          No matches for the current filters
         </h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Try adjusting your search or filter criteria.
+        <p className="mt-2 max-w-sm text-xs text-slate-500">
+          Adjust the filters or clear them to bring the full board back into view.
         </p>
         {hasActiveFilters && (
-          <Button variant="outline" onClick={onClearFilters}>
-            Clear All Filters
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClearFilters}
+            className="mt-4 h-8 border border-[#D4D7DE] text-xs text-slate-600 hover:bg-[#EEF1F6]"
+          >
+            Clear filters
           </Button>
         )}
       </div>

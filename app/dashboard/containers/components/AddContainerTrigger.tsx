@@ -74,11 +74,12 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
 
   return (
     <>
-      <Button 
+      <Button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2"
+        size="sm"
+        className="h-8 gap-1 rounded border border-[#2563EB] bg-[#2563EB] px-3 text-xs font-semibold uppercase tracking-wide shadow-none hover:bg-[#1D4ED8]"
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-3.5 w-3.5" />
         Add Container
       </Button>
       
