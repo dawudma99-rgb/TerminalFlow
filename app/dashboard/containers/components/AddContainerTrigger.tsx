@@ -9,6 +9,11 @@ import type { Json } from '@/types/database'
 import { Tier } from '@/lib/tierUtils'
 import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
+import {
+  DEFAULT_MILESTONE,
+  resolveMilestone,
+  type ContainerMilestone,
+} from '@/lib/utils/milestones'
 
 interface AddContainerTriggerProps {
   reload?: () => Promise<void>
@@ -17,14 +22,18 @@ interface AddContainerTriggerProps {
 export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload }) => {
   const [isOpen, setIsOpen] = useState(false)
 
+  const defaultMilestone: ContainerMilestone = DEFAULT_MILESTONE
+
   const handleSave = async (data: {
     container_no: string
+    bl_number: string
     port: string
     arrival_date: string
     free_days: number
-    carrier: string
-    container_size: string
+    carrier: string | null
+    container_size: string | null
     assigned_to: string
+    milestone: ContainerMilestone
     demurrage_enabled: boolean
     demurrage_flat_rate: number
     demurrage_tiers: Tier[]
@@ -41,15 +50,25 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
         return dateStr.trim() === '' ? null : dateStr
       }
 
+      const normalizeOptionalString = (value: string | null): string | null => {
+        const trimmed = value?.trim()
+        return trimmed ? trimmed : null
+      }
+
       const containerData = {
         container_no: data.container_no,
+        bl_number: normalizeOptionalString(data.bl_number),
         port: data.port,
         arrival_date: normalizeDate(data.arrival_date),
         free_days: data.free_days,
         carrier: data.carrier || null,
         container_size: data.container_size || null,
-        notes: data.notes || null,
-        assigned_to: data.assigned_to || null,
+        milestone: resolveMilestone(data.milestone, {
+          gate_out_date: data.gate_out_date,
+          empty_return_date: data.empty_return_date,
+        }),
+        notes: normalizeOptionalString(data.notes),
+        assigned_to: normalizeOptionalString(data.assigned_to),
         gate_out_date: normalizeDate(data.gate_out_date),
         empty_return_date: normalizeDate(data.empty_return_date),
         demurrage_tiers: data.demurrage_enabled && data.demurrage_tiers?.length > 0

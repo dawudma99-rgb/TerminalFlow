@@ -18,9 +18,12 @@ import {
 } from '@/components/ui/tooltip'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import clsx from 'clsx'
-import { Edit, Trash2, Lock, Unlock } from 'lucide-react'
+import { Edit, Trash2, Lock, Unlock, Loader2 } from 'lucide-react'
 import { useState } from 'react'
-import type { ContainerRecordWithComputed } from '@/lib/data/containers-actions'
+import type {
+  ContainerRecordWithComputed,
+  ContainerMilestone,
+} from '@/lib/data/containers-actions'
 import { updateContainer } from '@/lib/data/containers-actions'
 import {
   Dialog,
@@ -30,6 +33,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  CONTAINER_MILESTONES,
+  DEFAULT_MILESTONE,
+  normalizeMilestone,
+  isValidMilestone,
+} from '@/lib/utils/milestones'
 
 interface ContainerTableProps {
   containers: ContainerRecordWithComputed[]
@@ -78,6 +94,8 @@ export function ContainerTable({
   const [selectedContainer, setSelectedContainer] = useState<ContainerRecordWithComputed | null>(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [isSavingNote, setIsSavingNote] = useState(false)
+  const [milestoneOverrides, setMilestoneOverrides] = useState<Record<string, ContainerMilestone>>({})
+  const [milestoneSaving, setMilestoneSaving] = useState<Record<string, boolean>>({})
 
   const handleOpenNote = (container: ContainerRecordWithComputed) => {
     setSelectedContainer(container)
@@ -108,15 +126,41 @@ export function ContainerTable({
     }
   }
 
+  const handleMilestoneChange = async (containerId: string, milestone: ContainerMilestone) => {
+    const previous =
+      normalizeMilestone(containers.find((c) => c.id === containerId)?.milestone) ??
+      DEFAULT_MILESTONE
+
+    setMilestoneOverrides((prev) => ({
+      ...prev,
+      [containerId]: milestone,
+    }))
+    setMilestoneSaving((prev) => ({ ...prev, [containerId]: true }))
+
+    try {
+      await updateContainer(containerId, { milestone })
+    } catch (error) {
+      setMilestoneOverrides((prev) => ({
+        ...prev,
+        [containerId]: previous,
+      }))
+      toast.error('Failed to update milestone. Please try again.')
+    } finally {
+      setMilestoneSaving((prev) => ({ ...prev, [containerId]: false }))
+    }
+  }
+
   return (
     <>
       <Table className="text-[13px]">
         <TableHeader className="sticky top-0 z-10 bg-[#F8FAFD] text-[11px] uppercase tracking-[0.14em] text-slate-500">
           <TableRow className="border-b border-[#DDE1E8]">
             <TableHead className="w-32">Container</TableHead>
+            <TableHead className="w-32">B/L Number</TableHead>
             <TableHead className="w-32">Port</TableHead>
             <TableHead className="w-32">Owner</TableHead>
             <TableHead className="w-32">Carrier</TableHead>
+            <TableHead className="w-32 text-center">Milestone</TableHead>
             {viewMode !== 'detention' && (
               <>
                 <TableHead className="w-32">Arrival</TableHead>
@@ -138,165 +182,213 @@ export function ContainerTable({
           </TableRow>
         </TableHeader>
         <TableBody className="[&>tr]:border-[#E4E7ED]">
-          {containers.map((container) => (
-            <TableRow key={container.id} className="group border-b border-[#E4E7ED] hover:bg-[#F2F5FA]">
-              <TableCell className="font-mono text-sm text-slate-700">
-                {container.container_no || '—'}
-              </TableCell>
-              <TableCell className="text-slate-700">{container.port || '—'}</TableCell>
-              <TableCell className="text-slate-600">
-                {container.assigned_to || (
-                  <span className="text-slate-400 italic">Unassigned</span>
-                )}
-              </TableCell>
-              <TableCell className="text-slate-600">{container.carrier || '—'}</TableCell>
-              {viewMode !== 'detention' && (
-                <>
-                  <TableCell className="text-slate-600">{formatDate(container.arrival_date)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-600">
-                    {container.free_days ?? '—'}
-                  </TableCell>
-                  <TableCell
-                    className={clsx(
-                      'text-right tabular-nums font-semibold',
-                      container.days_left != null && container.days_left < 0
-                        ? 'text-[#B91C1C]'
-                        : container.days_left != null && container.days_left <= 2
-                        ? 'text-[#B45309]'
-                        : 'text-[#1E293B]'
-                    )}
-                  >
-                    {container.days_left ?? '—'}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-600">
-                    {container.days_left != null && container.days_left < 0 && container.demurrage_fees
-                      ? `£${container.demurrage_fees.toLocaleString()}`
-                      : container.demurrage_fee_if_late != null
-                        ? `£${container.demurrage_fee_if_late.toFixed(2)}/day`
-                        : '—'}
-                    {Array.isArray(container.demurrage_tiers) && container.demurrage_tiers.length > 0 && (
-                      <span className="ml-1 text-[11px] uppercase tracking-wide text-slate-400">Tiered</span>
-                    )}
-                  </TableCell>
-                </>
-              )}
-              {viewMode !== 'demurrage' && (
-                <>
-                  <TableCell className="text-slate-600">{formatDate(container.gate_out_date)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-600">
-                    {container.detention_free_days ?? '—'}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-600">
-                    {container.days_left != null && container.days_left < 0 && container.detention_fees
-                      ? `£${container.detention_fees.toLocaleString()}`
-                      : container.detention_fee_rate != null
-                        ? `£${container.detention_fee_rate.toFixed(2)}/day`
-                        : '—'}
-                    {Array.isArray(container.detention_tiers) && container.detention_tiers.length > 0 && (
-                      <span className="ml-1 text-[11px] uppercase tracking-wide text-slate-400">Tiered</span>
-                    )}
-                  </TableCell>
-                </>
-              )}
-              <TableCell className="text-center">
-                <StatusBadge status={container.status} />
-              </TableCell>
-              <TableCell className="align-middle text-[13px]">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          handleOpenNote(container)
+          {containers.map((container) => {
+            const normalizedMilestone =
+              normalizeMilestone(container.milestone) ?? DEFAULT_MILESTONE
+            const currentMilestone =
+              milestoneOverrides[container.id] ?? normalizedMilestone
+            const isSavingMilestone = !!milestoneSaving[container.id]
+
+            return (
+              <TableRow key={container.id} className="group border-b border-[#E4E7ED] hover:bg-[#F2F5FA]">
+                <TableCell className="font-mono text-sm text-slate-700">
+                  {container.container_no || '—'}
+                </TableCell>
+                <TableCell className="text-slate-700">
+                  {container.bl_number || '—'}
+                </TableCell>
+                <TableCell className="text-slate-700">{container.port || '—'}</TableCell>
+                <TableCell className="text-slate-600">
+                  {container.assigned_to || (
+                    <span className="text-slate-400 italic">Unassigned</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-slate-600">{container.carrier || '—'}</TableCell>
+                <TableCell className="text-center">
+                  <div className="flex justify-center">
+                    <div className="relative inline-flex">
+                      <Select
+                        value={currentMilestone}
+                        onValueChange={(value) => {
+                          if (isValidMilestone(value)) {
+                            handleMilestoneChange(container.id, value)
+                          } else {
+                            handleMilestoneChange(container.id, DEFAULT_MILESTONE)
+                          }
                         }}
-                        className="block max-w-[200px] truncate text-left text-slate-700 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/30"
+                        disabled={isSavingMilestone}
                       >
-                        {container.notes && container.notes.trim() !== '' ? container.notes : '—'}
-                      </button>
-                    </TooltipTrigger>
-                    {container.notes && container.notes.trim() !== '' && (
-                      <TooltipContent>
-                        <p className="max-w-xs text-sm leading-relaxed">{container.notes}</p>
-                      </TooltipContent>
-                    )}
-                  </Tooltip>
-                </TooltipProvider>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                        <SelectTrigger
+                          className={clsx(
+                            'w-[140px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                            isSavingMilestone && 'pr-9'
+                          )}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CONTAINER_MILESTONES.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {isSavingMilestone && (
+                        <Loader2 className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+
+                {viewMode !== 'detention' && (
+                  <>
+                    <TableCell className="text-slate-600">{formatDate(container.arrival_date)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-slate-600">
+                      {container.free_days ?? '—'}
+                    </TableCell>
+                    <TableCell
+                      className={clsx(
+                        'text-right tabular-nums font-semibold',
+                        container.days_left != null && container.days_left < 0
+                          ? 'text-[#B91C1C]'
+                          : container.days_left != null && container.days_left <= 2
+                            ? 'text-[#B45309]'
+                            : 'text-[#1E293B]'
+                      )}
+                    >
+                      {container.days_left ?? '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-slate-600">
+                      {container.days_left != null && container.days_left < 0 && container.demurrage_fees
+                        ? `£${container.demurrage_fees.toLocaleString()}`
+                        : container.demurrage_fee_if_late != null
+                          ? `£${container.demurrage_fee_if_late.toFixed(2)}/day`
+                          : '—'}
+                      {Array.isArray(container.demurrage_tiers) && container.demurrage_tiers.length > 0 && (
+                        <span className="ml-1 text-[11px] uppercase tracking-wide text-slate-400">Tiered</span>
+                      )}
+                    </TableCell>
+                  </>
+                )}
+                {viewMode !== 'demurrage' && (
+                  <>
+                    <TableCell className="text-slate-600">{formatDate(container.gate_out_date)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-slate-600">
+                      {container.detention_free_days ?? '—'}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-slate-600">
+                      {container.days_left != null && container.days_left < 0 && container.detention_fees
+                        ? `£${container.detention_fees.toLocaleString()}`
+                        : container.detention_fee_rate != null
+                          ? `£${container.detention_fee_rate.toFixed(2)}/day`
+                          : '—'}
+                      {Array.isArray(container.detention_tiers) && container.detention_tiers.length > 0 && (
+                        <span className="ml-1 text-[11px] uppercase tracking-wide text-slate-400">Tiered</span>
+                      )}
+                    </TableCell>
+                  </>
+                )}
+                <TableCell className="text-center">
+                  <StatusBadge status={container.status} />
+                </TableCell>
+                <TableCell className="align-middle text-[13px]">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => onEdit(container)}
-                          className="text-slate-500 hover:bg-[#E6EBF5] hover:text-[#1E293B]"
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            handleOpenNote(container)
+                          }}
+                          className="block max-w-[200px] truncate text-left text-slate-700 underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/30"
                         >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                          {container.notes && container.notes.trim() !== '' ? container.notes : '—'}
+                        </button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Edit container</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => onToggleStatus(container)}
-                          className={clsx(
-                            "hover:bg-[#E6EBF5]",
-                            container.is_closed
-                              ? "text-[#047857] hover:text-[#065F46]"
-                              : "text-slate-500 hover:text-[#1E293B]"
-                          )}
-                        >
-                          {container.is_closed ? (
-                            <Unlock className="h-4 w-4" />
-                          ) : (
-                            <Lock className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{container.is_closed ? 'Reopen container' : 'Close container'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <ConfirmDialog
-                          title="Delete Container"
-                          description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
-                          onConfirm={() => onDelete(container)}
-                          confirmText="Delete"
-                          cancelText="Cancel"
-                          variant="destructive"
-                          trigger={
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-[#B91C1C] hover:bg-[#FDECEC] hover:text-[#991B1B]"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          }
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Delete container</p>
-                      </TooltipContent>
+                      {container.notes && container.notes.trim() !== '' && (
+                        <TooltipContent>
+                          <p className="max-w-xs text-sm leading-relaxed">{container.notes}</p>
+                        </TooltipContent>
+                      )}
                     </Tooltip>
                   </TooltipProvider>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onEdit(container)}
+                            className="text-slate-500 hover:bg-[#E6EBF5] hover:text-[#1E293B]"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Edit container</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onToggleStatus(container)}
+                            className={clsx(
+                              "hover:bg-[#E6EBF5]",
+                              container.is_closed
+                                ? "text-[#047857] hover:text-[#065F46]"
+                                : "text-slate-500 hover:text-[#1E293B]"
+                            )}
+                          >
+                            {container.is_closed ? (
+                              <Unlock className="h-4 w-4" />
+                            ) : (
+                              <Lock className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{container.is_closed ? 'Reopen container' : 'Close container'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <ConfirmDialog
+                            title="Delete Container"
+                            description={`Are you sure you want to delete container "${container.container_no || 'Unnamed Container'}"? This action cannot be undone.`}
+                            onConfirm={() => onDelete(container)}
+                            confirmText="Delete"
+                            cancelText="Cancel"
+                            variant="destructive"
+                            trigger={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-[#B91C1C] hover:bg-[#FDECEC] hover:text-[#991B1B]"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Delete container</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
 

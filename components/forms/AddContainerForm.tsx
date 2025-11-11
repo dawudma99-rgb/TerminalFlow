@@ -22,6 +22,12 @@ import { useAuth } from '@/lib/auth/useAuth'
 import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import {
+  CONTAINER_MILESTONES,
+  DEFAULT_MILESTONE,
+  isValidMilestone,
+  type ContainerMilestone,
+} from '@/lib/utils/milestones'
 
 // UK carrier presets with realistic tiered demurrage/detention rates.
 // Note: Day 1 = first chargeable day (arrival date + free days).
@@ -133,10 +139,11 @@ interface ContainerFormData {
   port: string
   arrival_date: string
   free_days: number
-  carrier: string
-  container_size: string
+  carrier: string | null
+  container_size: string | null
   assigned_to: string
-  
+  milestone: ContainerMilestone
+ 
   // Demurrage Tracking
   demurrage_enabled: boolean
   demurrage_flat_rate: number
@@ -160,9 +167,10 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
     port: '',
     arrival_date: '',
     free_days: 7,
-    carrier: '',
-    container_size: '',
+    carrier: null,
+    container_size: null,
     assigned_to: '',
+    milestone: DEFAULT_MILESTONE,
     demurrage_enabled: false,
     demurrage_flat_rate: 0,
     demurrage_tiers: [],
@@ -180,15 +188,17 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
   const [savingDefaults, setSavingDefaults] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
-  const handleInputChange = (field: keyof ContainerFormData, value: string | number | boolean) => {
+  const handleInputChange = <K extends keyof ContainerFormData>(field: K, value: ContainerFormData[K]) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }))
 
-    // If carrier changed, try to load defaults
-    if (field === 'carrier' && typeof value === 'string' && value.trim() && profile?.organization_id) {
-      loadCarrierDefaults(value.trim())
+    if (field === 'carrier') {
+      const carrierValue = typeof value === 'string' ? value.trim() : ''
+      if (carrierValue && profile?.organization_id) {
+        void loadCarrierDefaults(carrierValue)
+      }
     }
   }
 
@@ -360,9 +370,10 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       port: '',
       arrival_date: '',
       free_days: 7,
-      carrier: '',
-      container_size: '',
+      carrier: null,
+      container_size: null,
       assigned_to: '',
+      milestone: DEFAULT_MILESTONE,
       demurrage_enabled: false,
       demurrage_flat_rate: 0,
       demurrage_tiers: [],
@@ -495,7 +506,30 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     <p className="text-sm text-destructive mt-1">{validationErrors.port}</p>
                   )}
                 </div>
-                
+
+                <div className="space-y-2">
+                  <Label htmlFor="milestone" className="text-sm font-medium">
+                    Milestone
+                  </Label>
+                  <Select
+                    value={formData.milestone}
+                    onValueChange={(value) =>
+                      handleInputChange('milestone', isValidMilestone(value) ? value : DEFAULT_MILESTONE)
+                    }
+                  >
+                    <SelectTrigger id="milestone" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONTAINER_MILESTONES.map((milestone) => (
+                        <SelectItem key={milestone} value={milestone}>
+                          {milestone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+ 
                 <div className="space-y-2">
                   <Label htmlFor="arrival_date" className="text-sm font-medium">
                     Arrival Date *
@@ -540,7 +574,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     Carrier
                   </Label>
                   <Select
-                    value={formData.carrier}
+                    value={formData.carrier || ''}
                     onValueChange={async (carrier) => {
                       setFormData(prev => ({ ...prev, carrier }))
                       await loadCarrierDefaults(carrier)
@@ -564,7 +598,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     Container Size
                   </Label>
                   <Select
-                    value={formData.container_size}
+                    value={formData.container_size || ''}
                     onValueChange={(value) => handleInputChange('container_size', value)}
                   >
                     <SelectTrigger id="container_size" className="w-full">

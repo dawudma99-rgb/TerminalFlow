@@ -155,6 +155,7 @@ export type Database = {
           actual_fee_paid: number
           arrival_date: string
           assigned_to: string | null
+          bl_number: string | null
           carrier: string | null
           container_no: string
           container_size: string | null
@@ -187,6 +188,7 @@ export type Database = {
           actual_fee_paid?: number
           arrival_date: string
           assigned_to?: string | null
+          bl_number?: string | null
           carrier?: string | null
           container_no: string
           container_size?: string | null
@@ -219,6 +221,7 @@ export type Database = {
           actual_fee_paid?: number
           arrival_date?: string
           assigned_to?: string | null
+          bl_number?: string | null
           carrier?: string | null
           container_no?: string
           container_size?: string | null

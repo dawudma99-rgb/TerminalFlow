@@ -5,6 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
 import { revalidatePath } from 'next/cache'
 import { computeDerivedFields } from '@/lib/utils/containers'
+import {
+  resolveMilestone,
+  type ContainerMilestone,
+} from '@/lib/utils/milestones'
+import { logger } from '@/lib/utils/logger'
 
 export type ContainerRecord = Database['public']['Tables']['containers']['Row']
 export type ContainerInsert = Database['public']['Tables']['containers']['Insert']
@@ -80,10 +85,10 @@ export async function insertContainer(
   listId?: string | null
 ) {
   const supabase = await createClient()
-  
+
   // Get the current user's organization_id
   const orgId = await getOrgId(supabase)
-  
+
   // If no listId provided, fetch from profile
   let finalListId = listId
   if (!finalListId) {
@@ -93,27 +98,49 @@ export async function insertContainer(
       .select('current_list_id')
       .eq('id', userId)
       .single()
-    
+
     if (profileError) {
       throw new Error(`Failed to fetch profile: ${profileError.message}`)
     }
-    
+
     finalListId = profile?.current_list_id ?? null
   }
-  
-  const containerWithOrg = {
+
+  const containerWithMilestone = {
     ...container,
+  }
+
+  containerWithMilestone.milestone = resolveMilestone(
+    containerWithMilestone.milestone,
+    {
+      gate_out_date: containerWithMilestone.gate_out_date,
+      empty_return_date: containerWithMilestone.empty_return_date,
+    }
+  )
+
+  const containerWithOrg = {
+    ...containerWithMilestone,
     organization_id: orgId,
     list_id: finalListId, // Always set list_id (can be null if no active list)
   }
-  
+
+  console.log('[insertContainer] payload', {
+    payload: containerWithOrg,
+    organization_id: orgId,
+    list_id: finalListId,
+  })
+
   const { data, error } = await supabase
     .from('containers')
     .insert(containerWithOrg)
     .select()
     .single()
 
-  if (error) throw new Error(`Supabase insertContainer error: ${error.message}`)
+  if (error) {
+    const details = error.details ? ` Details: ${error.details}` : ''
+    const hint = error.hint ? ` Hint: ${error.hint}` : ''
+    throw new Error(`Supabase insertContainer error: ${error.message}.${details}${hint}`)
+  }
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/containers')
   return data
@@ -123,18 +150,84 @@ export async function insertContainer(
 /**
  * Update an existing container record by ID.
  */
-export async function updateContainer(id: string, fields: ContainerUpdate) {
+type ContainerUpdateInput = Partial<ContainerUpdate> & {
+  milestone?: ContainerMilestone | null
+}
+
+export async function updateContainer(id: string, fields: ContainerUpdateInput) {
   const supabase = await createClient()
-  const orgId = await getOrgId(supabase)
+
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    logger.error('updateContainer invalid id format', { id })
+    throw new Error('Invalid container ID format. Expected UUID.')
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    logger.error('updateContainer unauthorized user', { id, userError })
+    throw new Error('Unauthorized user')
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || !profile?.organization_id) {
+    logger.error('updateContainer missing organization_id', {
+      id,
+      profileError,
+      userId: user.id,
+    })
+    throw new Error('Organization ID not found for user')
+  }
+
+  const normalizedFields: ContainerUpdateInput = {
+    ...fields,
+  }
+
+  // All milestone validation, legacy mapping, and fallbacks live in
+  // `lib/utils/milestones.ts` so server actions stay thin and consistent.
+  if (Object.prototype.hasOwnProperty.call(normalizedFields, 'milestone')) {
+    normalizedFields.milestone = resolveMilestone(normalizedFields.milestone, {
+      gate_out_date: (normalizedFields as ContainerUpdate).gate_out_date,
+      empty_return_date: (normalizedFields as ContainerUpdate).empty_return_date,
+    })
+  }
+
+  const safeFields = Object.fromEntries(
+    Object.entries({
+      ...normalizedFields,
+      organization_id: profile.organization_id,
+    }).filter(([, value]) => value !== undefined)
+  ) as Partial<ContainerUpdate> & { organization_id: string }
+
+  console.log('[updateContainer] payload', {
+    id,
+    idType: typeof id,
+    payload: safeFields,
+  })
+
   const { data, error } = await supabase
     .from('containers')
-    .update(fields)
+    .update(safeFields)
     .eq('id', id)
-    .eq('organization_id', orgId)
+    .eq('organization_id', profile.organization_id)
     .select()
     .single()
 
-  if (error) throw new Error(`Supabase updateContainer error: ${error.message}`)
+  if (error) {
+    logger.error('Supabase updateContainer error', { id, error })
+    const details = error.details ? ` Details: ${error.details}` : ''
+    const hint = error.hint ? ` Hint: ${error.hint}` : ''
+    throw new Error(`Supabase updateContainer error: ${error.message}.${details}${hint}`)
+  }
+
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/containers')
   return data

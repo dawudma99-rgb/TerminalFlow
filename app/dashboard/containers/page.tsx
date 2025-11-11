@@ -17,7 +17,32 @@ import { AddContainerTrigger } from './components/AddContainerTrigger'
 import { FilterToolbar } from './components/FilterToolbar'
 import { StatsSummary } from './components/StatsCards'
 import { EmptyStates } from './components/EmptyStates'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  CONTAINER_MILESTONES,
+  DEFAULT_MILESTONE,
+  normalizeMilestone,
+  isValidMilestone,
+  type ContainerMilestone,
+} from '@/lib/utils/milestones'
 
+type EditContainerFormData = {
+  container_no: string
+  bl_number: string
+  port: string
+  arrival_date: string
+  free_days: string
+  carrier: string | null
+  container_size: string | null
+  milestone: ContainerMilestone
+  notes: string
+}
 
 function EditContainerDialog({
   container,
@@ -30,7 +55,34 @@ function EditContainerDialog({
   onClose: () => void
   reload: () => Promise<void>
 }) {
+  const [formData, setFormData] = useState<EditContainerFormData>({
+    container_no: container?.container_no ?? '',
+    bl_number: container?.bl_number ?? '',
+    port: container?.port ?? '',
+    arrival_date: container?.arrival_date ? container.arrival_date.split('T')[0] : '',
+    free_days: container?.free_days?.toString() ?? '7',
+    carrier: container?.carrier ?? null,
+    container_size: container?.container_size ?? null,
+    milestone: container ? normalizeMilestone(container.milestone) ?? DEFAULT_MILESTONE : DEFAULT_MILESTONE,
+    notes: container?.notes ?? '',
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (container) {
+      setFormData({
+        container_no: container.container_no ?? '',
+        bl_number: container.bl_number ?? '',
+        port: container.port ?? '',
+        arrival_date: container.arrival_date ? container.arrival_date.split('T')[0] : '',
+        free_days: container.free_days?.toString() ?? '7',
+        carrier: container.carrier ?? null,
+        container_size: container.container_size ?? null,
+        milestone: normalizeMilestone(container.milestone) ?? DEFAULT_MILESTONE,
+        notes: container.notes ?? '',
+      })
+    }
+  }, [container])
 
   if (!container) return null
 
@@ -39,15 +91,19 @@ function EditContainerDialog({
     setIsSubmitting(true)
 
     try {
-      const formData = new FormData(e.currentTarget)
-      const updatedData: ContainerUpdate = {
-        container_no: formData.get('container_no') as string,
-        port: formData.get('port') as string,
-        arrival_date: formData.get('arrival_date') as string,
-        free_days: parseInt(formData.get('free_days') as string) || 7,
-        carrier: (formData.get('carrier') as string) || null,
-        container_size: (formData.get('container_size') as string) || null,
-        notes: (formData.get('notes') as string) || null,
+      const updatedData: ContainerUpdate & {
+        bl_number?: string | null
+        milestone?: ContainerMilestone
+      } = {
+        container_no: formData.container_no.trim(),
+        port: formData.port.trim(),
+        arrival_date: formData.arrival_date,
+        free_days: parseInt(formData.free_days, 10) || 7,
+        carrier: formData.carrier?.trim() ? formData.carrier.trim() : null,
+        container_size: formData.container_size || null,
+        notes: formData.notes.trim() ? formData.notes.trim() : null,
+        bl_number: formData.bl_number.trim() ? formData.bl_number.trim() : null,
+        milestone: formData.milestone,
       }
 
       await updateContainer(container.id, updatedData)
@@ -77,8 +133,25 @@ function EditContainerDialog({
               <Input
                 id="edit-container_no"
                 name="container_no"
-                defaultValue={container.container_no || ''}
+                value={formData.container_no}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, container_no: event.target.value }))
+                }
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="edit-bl_number" className="text-sm font-medium">
+                B/L Number
+              </label>
+              <Input
+                id="edit-bl_number"
+                name="bl_number"
+                value={formData.bl_number}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, bl_number: event.target.value }))
+                }
+                placeholder="Enter B/L number"
               />
             </div>
             <div className="space-y-2">
@@ -88,7 +161,10 @@ function EditContainerDialog({
               <Input
                 id="edit-port"
                 name="port"
-                defaultValue={container.port || ''}
+                value={formData.port}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, port: event.target.value }))
+                }
                 required
               />
             </div>
@@ -100,7 +176,10 @@ function EditContainerDialog({
                 id="edit-arrival_date"
                 name="arrival_date"
                 type="date"
-                defaultValue={container.arrival_date ? container.arrival_date.split('T')[0] : ''}
+                value={formData.arrival_date}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, arrival_date: event.target.value }))
+                }
                 required
               />
             </div>
@@ -112,7 +191,10 @@ function EditContainerDialog({
                 id="edit-free_days"
                 name="free_days"
                 type="number"
-                defaultValue={container.free_days || 7}
+                value={formData.free_days}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, free_days: event.target.value }))
+                }
                 min="1"
               />
             </div>
@@ -123,7 +205,13 @@ function EditContainerDialog({
               <Input
                 id="edit-carrier"
                 name="carrier"
-                defaultValue={container.carrier || ''}
+                value={formData.carrier ?? ''}
+                onChange={(event) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    carrier: event.target.value.trim() === '' ? null : event.target.value,
+                  }))
+                }
               />
             </div>
             <div className="space-y-2">
@@ -133,7 +221,13 @@ function EditContainerDialog({
               <select
                 id="edit-container_size"
                 name="container_size"
-                defaultValue={container.container_size || ''}
+                value={formData.container_size ?? ''}
+                onChange={(event) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    container_size: event.target.value === '' ? null : event.target.value,
+                  }))
+                }
                 className="w-full border border-input rounded-md px-3 py-2 bg-background text-foreground"
               >
                 <option value="">Select size</option>
@@ -141,6 +235,31 @@ function EditContainerDialog({
                 <option value="40ft">40ft</option>
                 <option value="45ft">45ft</option>
               </select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="edit-milestone" className="text-sm font-medium">
+                Milestone
+              </label>
+              <Select
+                value={formData.milestone}
+                onValueChange={(value) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    milestone: isValidMilestone(value) ? value : DEFAULT_MILESTONE,
+                  }))
+                }}
+              >
+                <SelectTrigger id="edit-milestone">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTAINER_MILESTONES.map((milestone) => (
+                    <SelectItem key={milestone} value={milestone}>
+                      {milestone}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="space-y-2">
@@ -151,7 +270,10 @@ function EditContainerDialog({
               id="edit-notes"
               name="notes"
               rows={3}
-              defaultValue={container.notes || ''}
+              value={formData.notes}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, notes: event.target.value }))
+              }
               className="w-full border border-input rounded-md px-3 py-2 bg-background text-foreground resize-y"
             />
           </div>

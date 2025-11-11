@@ -28,7 +28,9 @@ export interface ContainerRecord {
   detention_fee_rate?: ContainerRow['detention_fee_rate'] | null
   has_detention?: ContainerRow['has_detention'] | null
   container_no?: ContainerRow['container_no']
+  bl_number?: ContainerRow['bl_number'] | null
   carrier?: ContainerRow['carrier']
+  milestone?: ContainerRow['milestone'] | null
   created_at?: ContainerRow['created_at'] | null
   updated_at?: ContainerRow['updated_at'] | null
   version?: ContainerRow['version'] | null
@@ -39,6 +41,9 @@ export interface ContainerWithDerivedFields extends ContainerRecord {
   status: ContainerStatus
   demurrage_fees: number
   detention_fees: number
+  lfd_date: string | null
+  detention_chargeable_days: number | null
+  detention_status: 'Safe' | 'Warning' | 'Overdue' | null
 }
 
 type TierLike = {
@@ -105,6 +110,14 @@ function resolveTierArray(source?: ContainerRecord['demurrage_tiers']): Tier[] |
 
 function resolveFeeRate(value?: ContainerRecord['demurrage_fee_if_late'] | ContainerRecord['detention_fee_rate'] | null): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+const DAY_IN_MS = 86400000
+
+function startOfDay(date: Date): Date {
+  const next = new Date(date.getTime())
+  next.setHours(0, 0, 0, 0)
+  return next
 }
 
 /**
@@ -193,19 +206,45 @@ export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFi
   
   // --- DETENTION CALCULATION ---
   let detention_fees = 0
+  let computedLfdDate: string | null = null
+  let detentionChargeableDays: number | null = null
+  let detentionStatus: 'Safe' | 'Warning' | 'Overdue' | null = null
+
   if (c.has_detention) {
-    const gateOut = c.gate_out_date ? new Date(c.gate_out_date) : null
-    const emptyReturn = c.empty_return_date ? new Date(c.empty_return_date) : null
+    const gateOut = c.gate_out_date ? parseDateFlexible(c.gate_out_date) : null
+    const emptyReturn = c.empty_return_date ? parseDateFlexible(c.empty_return_date) : null
     const detentionFreeDays = c.detention_free_days ?? 7
 
     if (gateOut) {
       const endDate = emptyReturn || new Date()
-      const totalDays = Math.ceil((endDate.getTime() - gateOut.getTime()) / 86400000)
-      const detentionDays = totalDays - detentionFreeDays
+      const lfdDateObj = new Date(gateOut.getTime() + detentionFreeDays * DAY_IN_MS)
 
-      if (detentionDays > 0) {
+      if (!Number.isNaN(lfdDateObj.getTime())) {
+        const normalizedLfd = startOfDay(lfdDateObj)
+        const normalizedEnd = startOfDay(endDate)
+        const diffMs = normalizedEnd.getTime() - normalizedLfd.getTime()
+
+        if (!Number.isNaN(diffMs)) {
+          const diffDays = Math.floor(diffMs / DAY_IN_MS)
+          detentionChargeableDays = diffDays > 0 ? diffDays : 0
+        }
+
+        computedLfdDate = normalizedLfd.toISOString()
+      }
+
+      if (detentionChargeableDays != null) {
+        if (detentionChargeableDays === 0) {
+          detentionStatus = 'Safe'
+        } else if (detentionChargeableDays <= 2) {
+          detentionStatus = 'Warning'
+        } else {
+          detentionStatus = 'Overdue'
+        }
+      }
+
+      if (detentionChargeableDays && detentionChargeableDays > 0) {
         detention_fees = calculateTieredFees(
-          detentionDays,
+          detentionChargeableDays,
           detentionTiers,
           detentionRate
         )
@@ -217,8 +256,7 @@ export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFi
           gateOut,
           emptyReturn,
           detentionFreeDays,
-          totalDays,
-          detentionDays,
+          detentionChargeableDays,
           detention_tiers: detentionTiers,
           detention_fees
         })
@@ -236,7 +274,10 @@ export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFi
     days_left,
     status,
     demurrage_fees,
-    detention_fees
+    detention_fees,
+    lfd_date: computedLfdDate ?? c.lfd_date ?? null,
+    detention_chargeable_days: detentionChargeableDays,
+    detention_status: detentionStatus
   }
 }
 
