@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import clsx from 'clsx'
-import { Edit, Trash2, Lock, Unlock, Loader2 } from 'lucide-react'
+import { Edit, Trash2, Lock, Unlock, Loader2, Info } from 'lucide-react'
 import { useState } from 'react'
 import type {
   ContainerRecordWithComputed,
@@ -157,7 +157,36 @@ export function ContainerTable({
           <TableRow className="border-b border-[#DDE1E8]">
             <TableHead className="w-32">Container</TableHead>
             <TableHead className="w-32">B/L Number</TableHead>
-            <TableHead className="w-32">Port</TableHead>
+            <TableHead className="w-24">
+              <div className="flex items-center gap-1">
+                <span>POL</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Port of Loading – origin port</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </TableHead>
+            <TableHead className="w-24">
+              <div className="flex items-center gap-1">
+                <span>POD</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Port of Discharge – destination port</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </TableHead>
             <TableHead className="w-32">Owner</TableHead>
             <TableHead className="w-32">Carrier</TableHead>
             <TableHead className="w-32 text-center">Milestone</TableHead>
@@ -197,7 +226,8 @@ export function ContainerTable({
                 <TableCell className="text-slate-700">
                   {container.bl_number || '—'}
                 </TableCell>
-                <TableCell className="text-slate-700">{container.port || '—'}</TableCell>
+                <TableCell className="w-24 truncate text-slate-700" title="Port of Loading – origin port">{container.pol ?? '—'}</TableCell>
+                <TableCell className="w-24 truncate text-slate-700" title="Port of Discharge – destination port">{container.pod ?? '—'}</TableCell>
                 <TableCell className="text-slate-600">
                   {container.assigned_to || (
                     <span className="text-slate-400 italic">Unassigned</span>

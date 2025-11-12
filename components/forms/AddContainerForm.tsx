@@ -14,6 +14,12 @@ import {
   FileText, 
   Info
 } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { DemurrageTierEditor } from './DemurrageTierEditor'
 import { DetentionTierEditor } from './DetentionTierEditor'
 import { Tier, validateTierConfiguration } from '@/lib/tierUtils'
@@ -136,7 +142,8 @@ interface AddContainerFormProps {
 interface ContainerFormData {
   // Basic Information
   container_no: string
-  port: string
+  pol: string
+  pod: string
   arrival_date: string
   free_days: number
   carrier: string | null
@@ -164,7 +171,8 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
   const { profile } = useAuth()
   const [formData, setFormData] = useState<ContainerFormData>({
     container_no: '',
-    port: '',
+    pol: '',
+    pod: '',
     arrival_date: '',
     free_days: 7,
     carrier: null,
@@ -341,9 +349,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       errors.container_no = 'Container number is required'
     }
 
-    if (!formData.port?.trim()) {
-      errors.port = 'Port is required'
-    }
+    // pol and pod are optional, no validation needed
 
     if (!formData.arrival_date) {
       errors.arrival_date = 'Arrival date is required'
@@ -367,7 +373,8 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
   const resetForm = () => {
     setFormData({
       container_no: '',
-      port: '',
+      pol: '',
+      pod: '',
       arrival_date: '',
       free_days: 7,
       carrier: null,
@@ -482,29 +489,55 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="port" className="text-sm font-medium">
-                    Port *
-                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="pol" className="text-sm font-medium">
+                      POL
+                    </Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Port of Loading – where the container is shipped from.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                   <Input
-                    id="port"
-                    value={formData.port}
-                    onChange={(e) => {
-                      handleInputChange('port', e.target.value)
-                      // Clear validation error when user types
-                      if (validationErrors.port) {
-                        setValidationErrors(prev => {
-                          const newErrors = { ...prev }
-                          delete newErrors.port
-                          return newErrors
-                        })
-                      }
-                    }}
-                    placeholder="e.g., Los Angeles"
-                    className={validationErrors.port ? 'border-destructive' : ''}
+                    id="pol"
+                    value={formData.pol}
+                    onChange={(e) => handleInputChange('pol', e.target.value)}
+                    placeholder="Enter POL"
+                    aria-label="Port of Loading"
+                    title="Port of Loading – where the container is shipped from."
                   />
-                  {validationErrors.port && (
-                    <p className="text-sm text-destructive mt-1">{validationErrors.port}</p>
-                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="pod" className="text-sm font-medium">
+                      POD
+                    </Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Port of Discharge – where the container arrives.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <Input
+                    id="pod"
+                    value={formData.pod}
+                    onChange={(e) => handleInputChange('pod', e.target.value)}
+                    placeholder="Enter POD"
+                    aria-label="Port of Discharge"
+                    title="Port of Discharge – where the container arrives."
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -879,7 +912,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
             </Button>
             <Button
               onClick={handleSave}
-              disabled={isSubmitting || !formData.container_no || !formData.port || !formData.arrival_date}
+              disabled={isSubmitting || !formData.container_no || !formData.arrival_date}
               className="min-w-[140px]"
             >
               {isSubmitting ? (

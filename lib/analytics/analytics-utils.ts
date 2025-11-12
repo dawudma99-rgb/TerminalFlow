@@ -127,7 +127,8 @@ export function calculatePortPerformance(
   const portMap = new Map<string, { count: number; totalDaysLeft: number; activeCount: number }>()
 
   containers.forEach((container) => {
-    const port = container.port || 'Unknown'
+    // Use pod for backward compatibility (port was POD)
+    const port = container.pod || 'Unknown'
     
     if (!portMap.has(port)) {
       portMap.set(port, {
@@ -191,7 +192,7 @@ export function getTopAtRiskContainers(
     .slice(0, 5) // Top 5
     .map((container) => ({
       container_no: container.container_no || '',
-      port: container.port || 'Unknown',
+      port: container.pod || 'Unknown',
       days_left: container.days_left || 0,
       demurrage_fee_if_late: container.demurrage_fee_if_late || 0,
       status: container.status,

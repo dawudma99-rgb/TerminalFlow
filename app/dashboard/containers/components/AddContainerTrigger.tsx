@@ -27,7 +27,8 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
   const handleSave = async (data: {
     container_no: string
     bl_number: string
-    port: string
+    pol: string
+    pod: string
     arrival_date: string
     free_days: number
     carrier: string | null
@@ -58,7 +59,8 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
       const containerData = {
         container_no: data.container_no,
         bl_number: normalizeOptionalString(data.bl_number),
-        port: data.port,
+        pol: normalizeOptionalString(data.pol),
+        pod: normalizeOptionalString(data.pod),
         arrival_date: normalizeDate(data.arrival_date),
         free_days: data.free_days,
         carrier: data.carrier || null,

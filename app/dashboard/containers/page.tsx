@@ -31,11 +31,27 @@ import {
   isValidMilestone,
   type ContainerMilestone,
 } from '@/lib/utils/milestones'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Info } from 'lucide-react'
 
 type EditContainerFormData = {
   container_no: string
   bl_number: string
-  port: string
+  pol: string
+  pod: string
   arrival_date: string
   free_days: string
   carrier: string | null
@@ -58,7 +74,8 @@ function EditContainerDialog({
   const [formData, setFormData] = useState<EditContainerFormData>({
     container_no: container?.container_no ?? '',
     bl_number: container?.bl_number ?? '',
-    port: container?.port ?? '',
+    pol: container?.pol ?? '',
+    pod: container?.pod ?? '',
     arrival_date: container?.arrival_date ? container.arrival_date.split('T')[0] : '',
     free_days: container?.free_days?.toString() ?? '7',
     carrier: container?.carrier ?? null,
@@ -73,7 +90,8 @@ function EditContainerDialog({
       setFormData({
         container_no: container.container_no ?? '',
         bl_number: container.bl_number ?? '',
-        port: container.port ?? '',
+        pol: container.pol ?? '',
+        pod: container.pod ?? '',
         arrival_date: container.arrival_date ? container.arrival_date.split('T')[0] : '',
         free_days: container.free_days?.toString() ?? '7',
         carrier: container.carrier ?? null,
@@ -91,12 +109,18 @@ function EditContainerDialog({
     setIsSubmitting(true)
 
     try {
+      const normalizeOptionalString = (value: string): string | null => {
+        const trimmed = value.trim()
+        return trimmed === '' ? null : trimmed
+      }
+
       const updatedData: ContainerUpdate & {
         bl_number?: string | null
         milestone?: ContainerMilestone
       } = {
         container_no: formData.container_no.trim(),
-        port: formData.port.trim(),
+        pol: normalizeOptionalString(formData.pol),
+        pod: normalizeOptionalString(formData.pod),
         arrival_date: formData.arrival_date,
         free_days: parseInt(formData.free_days, 10) || 7,
         carrier: formData.carrier?.trim() ? formData.carrier.trim() : null,
@@ -155,17 +179,59 @@ function EditContainerDialog({
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="edit-port" className="text-sm font-medium">
-                Port *
-              </label>
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="edit-pol" className="text-sm font-medium">
+                  POL
+                </label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Port of Loading – where the container is shipped from.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Input
-                id="edit-port"
-                name="port"
-                value={formData.port}
+                id="edit-pol"
+                name="pol"
+                value={formData.pol}
                 onChange={(event) =>
-                  setFormData((prev) => ({ ...prev, port: event.target.value }))
+                  setFormData((prev) => ({ ...prev, pol: event.target.value }))
                 }
-                required
+                placeholder="Enter POL"
+                aria-label="Port of Loading"
+                title="Port of Loading – where the container is shipped from."
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="edit-pod" className="text-sm font-medium">
+                  POD
+                </label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Port of Discharge – where the container arrives.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <Input
+                id="edit-pod"
+                name="pod"
+                value={formData.pod}
+                onChange={(event) =>
+                  setFormData((prev) => ({ ...prev, pod: event.target.value }))
+                }
+                placeholder="Enter POD"
+                aria-label="Port of Discharge"
+                title="Port of Discharge – where the container arrives."
               />
             </div>
             <div className="space-y-2">
@@ -424,7 +490,8 @@ export default function ContainersPage() {
         const query = debouncedSearchQuery.toLowerCase()
         const matchesSearch =
           container.container_no?.toLowerCase().includes(query) ||
-          container.port?.toLowerCase().includes(query) ||
+          container.pol?.toLowerCase().includes(query) ||
+          container.pod?.toLowerCase().includes(query) ||
           container.assigned_to?.toLowerCase().includes(query) ||
           container.carrier?.toLowerCase().includes(query)
         if (!matchesSearch) return false

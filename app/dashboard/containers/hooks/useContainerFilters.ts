@@ -51,7 +51,8 @@ export function useContainerFilters(containers: ContainerRecordWithComputed[]) {
         const query = debouncedSearchQuery.toLowerCase()
         const matchesSearch =
           container.container_no?.toLowerCase().includes(query) ||
-          container.port?.toLowerCase().includes(query) ||
+          container.pol?.toLowerCase().includes(query) ||
+          container.pod?.toLowerCase().includes(query) ||
           container.assigned_to?.toLowerCase().includes(query) ||
           container.carrier?.toLowerCase().includes(query)
         if (!matchesSearch) return false

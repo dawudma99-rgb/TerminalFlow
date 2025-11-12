@@ -106,8 +106,17 @@ export async function insertContainer(
     finalListId = profile?.current_list_id ?? null
   }
 
+  // Normalize empty strings to null for pol and pod
+  const normalizeOptionalString = (value: string | null | undefined): string | null => {
+    if (value === null || value === undefined) return null
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+  }
+
   const containerWithMilestone = {
     ...container,
+    pol: normalizeOptionalString(container.pol),
+    pod: normalizeOptionalString(container.pod),
   }
 
   containerWithMilestone.milestone = resolveMilestone(
@@ -187,8 +196,23 @@ export async function updateContainer(id: string, fields: ContainerUpdateInput) 
     throw new Error('Organization ID not found for user')
   }
 
+  // Normalize empty strings to null for pol and pod
+  const normalizeOptionalString = (value: string | null | undefined): string | null => {
+    if (value === null || value === undefined) return null
+    const trimmed = value.trim()
+    return trimmed === '' ? null : trimmed
+  }
+
   const normalizedFields: ContainerUpdateInput = {
     ...fields,
+  }
+
+  // Normalize pol and pod if present
+  if (Object.prototype.hasOwnProperty.call(normalizedFields, 'pol')) {
+    normalizedFields.pol = normalizeOptionalString(normalizedFields.pol as string | null | undefined)
+  }
+  if (Object.prototype.hasOwnProperty.call(normalizedFields, 'pod')) {
+    normalizedFields.pod = normalizeOptionalString(normalizedFields.pod as string | null | undefined)
   }
 
   // All milestone validation, legacy mapping, and fallbacks live in

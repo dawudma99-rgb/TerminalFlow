@@ -25,7 +25,8 @@ function AddContainerTrigger() {
 
   const handleSave = async (data: {
     container_no: string
-    port: string
+    pol: string
+    pod: string
     arrival_date: string
     free_days: number
     carrier: string
@@ -47,9 +48,15 @@ function AddContainerTrigger() {
         return dateStr.trim() === '' ? null : dateStr
       }
 
+      const normalizeOptionalString = (value: string | null): string | null => {
+        const trimmed = value?.trim()
+        return trimmed ? trimmed : null
+      }
+
       const containerData = {
         container_no: data.container_no,
-        port: data.port,
+        pol: normalizeOptionalString(data.pol),
+        pod: normalizeOptionalString(data.pod),
         arrival_date: normalizeDate(data.arrival_date),
         free_days: data.free_days,
         carrier: data.carrier || null,
