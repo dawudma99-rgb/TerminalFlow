@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X, Download } from 'lucide-react'
 
 interface FilterToolbarProps {
   searchQuery: string
@@ -36,6 +36,8 @@ interface FilterToolbarProps {
   owners: string[]
   hasActiveFilters: boolean
   addAction: React.ReactNode
+  onExport?: () => void
+  exporting?: boolean
 }
 
 export function FilterToolbar({
@@ -51,6 +53,8 @@ export function FilterToolbar({
   owners,
   hasActiveFilters,
   addAction,
+  onExport,
+  exporting = false,
 }: FilterToolbarProps) {
   const [isFiltersDialogOpen, setIsFiltersDialogOpen] = useState(false)
 
@@ -149,6 +153,21 @@ export function FilterToolbar({
               Both
             </ToggleGroupItem>
           </ToggleGroup>
+
+          {onExport && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExport}
+              disabled={exporting}
+              className="h-8 gap-1.5 rounded border border-[#D4D7DE] bg-white text-xs text-slate-600 hover:bg-[#EEF1F6] disabled:opacity-50"
+              aria-label="Export containers to CSV"
+              title="Export containers to CSV"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </Button>
+          )}
 
           {addAction}
         </div>

@@ -12,6 +12,7 @@ import { motion } from 'framer-motion'
 import type { ContainerUpdate } from '@/lib/data/containers-actions'
 import { toast } from 'sonner'
 import { useDebounce } from 'use-debounce'
+import { downloadFromUrl } from '@/lib/utils/download'
 import { ContainerTable } from './components/ContainerTable'
 import { AddContainerTrigger } from './components/AddContainerTrigger'
 import { FilterToolbar } from './components/FilterToolbar'
@@ -45,7 +46,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Info } from 'lucide-react'
+import { Info, Upload, Download } from 'lucide-react'
+import { ImportDialog } from '@/components/import/ImportDialog'
 
 type EditContainerFormData = {
   container_no: string
@@ -365,6 +367,8 @@ export default function ContainersPage() {
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now())
   const [timeAgo, setTimeAgo] = useState<string>('Just now')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   
   // Filter state
   const [searchQuery, setSearchQuery] = useState('')
@@ -530,6 +534,28 @@ export default function ContainersPage() {
 
   const hasActiveFilters = searchQuery.trim() !== '' || statusFilter !== 'all' || ownerFilter !== 'all'
 
+  // Map statusFilter to export status format (capitalize first letter, handle 'open' -> 'Open')
+  const statusForExport = useMemo(() => {
+    if (statusFilter === 'all') return 'All'
+    if (statusFilter === 'open') return 'Open'
+    // Capitalize first letter for others (Safe, Warning, Overdue, Closed)
+    return statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)
+  }, [statusFilter])
+
+  async function handleExport() {
+    try {
+      setExporting(true)
+      const t = toast.loading('Preparing export…')
+      const url = `/dashboard/containers/export?status=${encodeURIComponent(statusForExport)}`
+      const filename = await downloadFromUrl(url)
+      toast.success(`Exported ${filename}`, { id: t })
+    } catch (err: any) {
+      toast.error(err?.message || 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Compute stats from filtered containers (single-pass optimization)
   const stats = useMemo(() => {
     let open = 0
@@ -652,6 +678,31 @@ export default function ContainersPage() {
             <h1 className="text-xl font-semibold tracking-tight text-[#1F2937]">
               Container Control Room
             </h1>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setImportDialogOpen(true)}
+                className="h-8 gap-1.5 rounded border border-[#D4D7DE] bg-white text-xs text-slate-600 hover:bg-[#EEF1F6]"
+                aria-label="Import containers"
+                title="Import containers from CSV/Excel"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Import
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+                className="h-8 gap-1.5 rounded border border-[#D4D7DE] bg-white text-xs text-slate-600 hover:bg-[#EEF1F6] disabled:opacity-50"
+                aria-label="Export containers to CSV"
+                title="Export containers to CSV"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {exporting ? 'Exporting…' : 'Export'}
+              </Button>
+            </div>
           </div>
         </header>
 
@@ -671,6 +722,8 @@ export default function ContainersPage() {
             owners={uniqueOwners}
             hasActiveFilters={hasActiveFilters}
             addAction={<AddContainerTrigger reload={reload} />}
+            onExport={handleExport}
+            exporting={exporting}
           />
 
           <StatsSummary
@@ -739,6 +792,12 @@ export default function ContainersPage() {
           isOpen={!!editingContainer}
           onClose={() => setEditingContainer(null)}
           reload={reload}
+        />
+
+        <ImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onSuccess={reload}
         />
       </div>
     </AppLayout>
