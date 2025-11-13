@@ -133,8 +133,8 @@ export async function insertContainer(
     list_id: finalListId, // Always set list_id (can be null if no active list)
   }
 
-  console.log('[insertContainer] payload', {
-    payload: containerWithOrg,
+  logger.debug('[insertContainer] payload', {
+    container_no: containerWithOrg.container_no,
     organization_id: orgId,
     list_id: finalListId,
   })
@@ -231,10 +231,9 @@ export async function updateContainer(id: string, fields: ContainerUpdateInput) 
     }).filter(([, value]) => value !== undefined)
   ) as Partial<ContainerUpdate> & { organization_id: string }
 
-  console.log('[updateContainer] payload', {
+  logger.debug('[updateContainer] payload', {
     id,
-    idType: typeof id,
-    payload: safeFields,
+    fields: Object.keys(safeFields),
   })
 
   const { data, error } = await supabase

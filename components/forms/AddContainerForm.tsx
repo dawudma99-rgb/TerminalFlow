@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -443,12 +443,18 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         }
       }}
     >
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent 
+        aria-describedby="add-container-dialog-description"
+        className="max-w-5xl max-h-[90vh] overflow-y-auto p-0"
+      >
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2 text-2xl font-semibold">
             <Package className="h-6 w-6 text-primary" />
             Add New Container
           </DialogTitle>
+          <DialogDescription id="add-container-dialog-description">
+            Create a new container record so you can track demurrage and detention exposure.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="px-6 py-6 space-y-6">

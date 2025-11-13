@@ -47,6 +47,7 @@ export function validateRow(input: Record<string, any>): RowValidation {
   norm.container_size = str(input.container_size);
   norm.assigned_to = str(input.assigned_to);
   norm.notes = str(input.notes);
+  // Keep list_name normalization for preview purposes only (metadata; not used for list resolution)
   norm.list_name = str(input.list_name);
 
   // Optional numbers

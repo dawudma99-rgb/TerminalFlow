@@ -8,6 +8,7 @@ import { useEffect, useState, memo } from 'react'
 import { getOrganization } from '@/lib/data/user-actions'
 import { useTheme } from 'next-themes'
 import { LogOut, Moon, Sun } from 'lucide-react'
+import { logger } from '@/lib/utils/logger'
 
 // Memoized to prevent unnecessary re-renders that trigger useAuth calls
 export const Topbar = memo(function Topbar() {
@@ -25,7 +26,7 @@ export const Topbar = memo(function Topbar() {
             setOrgName(org?.name || '')
           }
         })
-        .catch((err) => console.error('Failed to load organization:', err))
+        .catch((err) => logger.error('Failed to load organization:', err))
     } else {
       // Use setTimeout to avoid synchronous setState in effect
       setTimeout(() => {

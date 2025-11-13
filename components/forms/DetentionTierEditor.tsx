@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { 
@@ -150,12 +150,18 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
             Add Detention Step
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-md">
+        <DialogContent 
+          aria-describedby="detention-add-tier-description"
+          className="max-w-md"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-700">
               <Clock className="h-4 w-4" />
               Add Detention Tier
             </DialogTitle>
+            <DialogDescription id="detention-add-tier-description">
+              Configure a new detention tier with a day range and daily rate.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
@@ -239,12 +245,18 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
 
       {/* Edit Tier Dialog */}
       <Dialog open={editingIndex !== null} onOpenChange={() => setEditingIndex(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent 
+          aria-describedby="detention-edit-tier-description"
+          className="max-w-md"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-700">
               <Edit className="h-4 w-4" />
               Edit Detention Tier
             </DialogTitle>
+            <DialogDescription id="detention-edit-tier-description">
+              Update the day range or rate for this detention tier.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">

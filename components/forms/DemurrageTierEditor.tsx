@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { 
@@ -150,12 +150,18 @@ export function DemurrageTierEditor({ tiers, onTiersChange, onSaveDefault, carri
             Add Demurrage Step
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-md">
+        <DialogContent 
+          aria-describedby="demurrage-add-tier-description"
+          className="max-w-md"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-700">
               <AlertTriangle className="h-4 w-4" />
               Add Demurrage Tier
             </DialogTitle>
+            <DialogDescription id="demurrage-add-tier-description">
+              Configure a new demurrage tier with a day range and daily rate.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
@@ -239,12 +245,18 @@ export function DemurrageTierEditor({ tiers, onTiersChange, onSaveDefault, carri
 
       {/* Edit Tier Dialog */}
       <Dialog open={editingIndex !== null} onOpenChange={() => setEditingIndex(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent 
+          aria-describedby="demurrage-edit-tier-description"
+          className="max-w-md"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-orange-700">
               <Edit className="h-4 w-4" />
               Edit Demurrage Tier
             </DialogTitle>
+            <DialogDescription id="demurrage-edit-tier-description">
+              Update the day range or rate for this demurrage tier.
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">

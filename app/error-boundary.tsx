@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/utils/logger'
 
 /**
  * GlobalErrorBoundary
@@ -30,7 +31,7 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
 
       // Log in dev mode
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[Global Error Boundary] Unhandled promise rejection:', event.reason)
+        logger.warn('[Global Error Boundary] Unhandled promise rejection:', event.reason)
       }
 
       // Optional: show toast (non-blocking)
@@ -59,7 +60,7 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
       }
 
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[Global Error Boundary] Uncaught error:', event.message)
+        logger.warn('[Global Error Boundary] Uncaught error:', event.message)
       }
 
       toast.error('An unexpected client error occurred.')

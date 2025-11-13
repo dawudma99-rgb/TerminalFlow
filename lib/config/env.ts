@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { logger } from '@/lib/utils/logger'
 
 /**
  * Environment variable validation schema
@@ -22,7 +23,7 @@ const parsed = envSchema.safeParse({
 
 if (!parsed.success) {
   const errors = parsed.error.flatten().fieldErrors
-  console.error('❌ Invalid environment variables:', errors)
+  logger.error('❌ Invalid environment variables:', errors)
   throw new Error(
     `Environment variable validation failed. Missing or invalid:\n${JSON.stringify(errors, null, 2)}\n\nPlease check your .env.local file.`
   )
@@ -36,7 +37,7 @@ export const env = parsed.data
 
 // Log successful validation in development
 if (env.NODE_ENV === 'development') {
-  console.log('✅ Environment variables loaded and validated successfully')
+  logger.info('✅ Environment variables loaded and validated successfully')
 }
 
 

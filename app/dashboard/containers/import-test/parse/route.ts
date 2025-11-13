@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { parseFile } from '@/lib/import/parser';
+import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
     const errorStack = err?.stack || 'No stack trace available';
     const errorName = err?.name || 'UnknownError';
     
-    console.error('[import-test] Error details:', {
+    logger.error('[import-test] Error details:', {
       name: errorName,
       message: errorMessage,
       stack: errorStack,

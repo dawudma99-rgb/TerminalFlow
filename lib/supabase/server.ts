@@ -28,7 +28,7 @@ export async function createClient() {
           const value = cookieStore.get(name)?.value
           // Log access token cookie presence for debugging
           if (name.includes('access-token')) {
-            console.log('[Supabase Server] Access token cookie found:', !!value, value ? `${value.substring(0, 20)}...` : 'null')
+            logger.debug('[Supabase Server] Access token cookie found:', { hasValue: !!value, preview: value ? `${value.substring(0, 20)}...` : 'null' })
           }
           return value
         },
@@ -54,7 +54,7 @@ export async function createClient() {
     }
   )
 
-  console.log('[Supabase] Server client initialized (write-enabled, reads cookies for JWT)')
+  logger.debug('[Supabase] Server client initialized (write-enabled, reads cookies for JWT)')
   logger.info('[Supabase] Server client created (reads cookies, attaches JWT)')
 
   return supabase

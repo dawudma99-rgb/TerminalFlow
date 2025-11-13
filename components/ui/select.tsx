@@ -33,18 +33,6 @@ function SelectTrigger({
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: "sm" | "default"
 }) {
-  // Removed debug log - use DEBUG flag to re-enable if needed
-  // if (DEBUG && process.env.NODE_ENV === 'development') {
-  //   console.log('SelectTrigger debug', {
-  //     asChild,
-  //     childCount: React.Children.count(children),
-  //     childTypes: Array.isArray(children)
-  //       ? children.map((c) => (c?.type?.name || typeof c))
-  //       : children?.type?.name || typeof children,
-  //     rawChildren: children,
-  //   });
-  // }
-  
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"

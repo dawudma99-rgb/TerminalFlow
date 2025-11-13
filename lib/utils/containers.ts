@@ -7,6 +7,7 @@
 const DEBUG = false
 
 import { calculateTieredFees, type Tier } from '@/lib/tierUtils'
+import { logger } from '@/lib/utils/logger'
 import type { Database } from '@/types/database'
 
 type ContainerRow = Database['public']['Tables']['containers']['Row']
@@ -180,7 +181,7 @@ export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFi
   if (days_left !== null && days_left < 0) {
     const daysOverdue = Math.abs(days_left)
     if (DEBUG && process.env.NODE_ENV === 'development') {
-      console.log('[computeDerivedFields:demurrage] BEFORE calculateTieredFees', {
+      logger.debug('[computeDerivedFields:demurrage] BEFORE calculateTieredFees', {
         containerId: c.id,
         containerNo: c.container_no,
         carrier: c.carrier,
@@ -196,7 +197,7 @@ export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFi
       demurrageRate
     )
     if (DEBUG && process.env.NODE_ENV === 'development') {
-      console.log('[computeDerivedFields:demurrage] RESULT', {
+      logger.debug('[computeDerivedFields:demurrage] RESULT', {
         containerId: c.id,
         containerNo: c.container_no,
         demurrage_fees
@@ -251,7 +252,7 @@ export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFi
       }
 
       if (DEBUG && process.env.NODE_ENV === 'development') {
-        console.log('[computeDerivedFields:detention]', {
+        logger.debug('[computeDerivedFields:detention]', {
           containerId: c.id,
           gateOut,
           emptyReturn,

@@ -62,157 +62,24 @@ export async function commitImport(rows: Array<Record<string, any>>): Promise<{
 
   const defaultListId = profile?.current_list_id ?? null;
 
-  // Cache for list_name -> list_id lookups
-  const listCache = new Map<string, string | null>();
-
-  async function resolveListId(listName: string | null | undefined): Promise<string | null> {
-    // Log raw input from Excel
-    const rawListName = listName;
-    console.log('[import-commit] resolveListId called:', {
-      rawListName,
-      rawType: typeof rawListName,
-      rawValue: rawListName === null ? 'null' : rawListName === undefined ? 'undefined' : `"${rawListName}"`,
-    });
-
-    if (!listName) {
-      console.log('[import-commit] No list_name provided, using defaultListId:', defaultListId);
-      return defaultListId;
-    }
-    
-    // TODO: Case-sensitivity issue - .eq('name', trimmed) is case-sensitive
-    // "Main List" vs "main list" vs "MAIN LIST" will be treated as different lists
-    // Consider using case-insensitive comparison or normalizing to lowercase
-    const trimmed = String(listName).trim();
-    
-    // TODO: Whitespace issue - .trim() only removes standard spaces
-    // Excel may contain non-breaking spaces (U+00A0), tabs, or other Unicode whitespace
-    // Consider using a more aggressive normalization (e.g., replace all whitespace with spaces)
-    console.log('[import-commit] Normalized list name:', {
-      raw: `"${rawListName}"`,
-      trimmed: `"${trimmed}"`,
-      length: trimmed.length,
-      charCodes: Array.from(trimmed).map(c => c.charCodeAt(0)),
-    });
-
-    if (!trimmed) {
-      console.log('[import-commit] List name is empty after trim, using defaultListId:', defaultListId);
-      return defaultListId;
-    }
-
-    // Check cache
-    if (listCache.has(trimmed)) {
-      const cachedId = listCache.get(trimmed) ?? null;
-      console.log('[import-commit] Found in cache:', {
-        listName: trimmed,
-        listId: cachedId,
-        source: 'cache',
-      });
-      return cachedId;
-    }
-
-    // TODO: Organization scoping - verify this query correctly filters by organization_id
-    // The .eq('organization_id', orgId) should prevent cross-org matches, but double-check
-    // that orgId is correctly set and the query is actually filtering
-    console.log('[import-commit] Looking up existing list:', {
-      listName: trimmed,
-      organizationId: orgId,
-      query: { name: trimmed, organization_id: orgId },
-    });
-
-    // Try to find existing list
-    // TODO: Case-sensitivity - this .eq('name', trimmed) is case-sensitive
-    // If the UI created "Main List" but Excel has "main list", this won't find it
-    const { data: existing, error: findError } = await supabase
-      .from('container_lists')
-      .select('id, name')
-      .eq('organization_id', orgId)
-      .eq('name', trimmed)
-      .single();
-
-    if (findError && findError.code !== 'PGRST116') {
-      // PGRST116 is "not found" - that's expected, log other errors
-      console.error('[import-commit] Error looking up list:', {
-        listName: trimmed,
-        error: findError.message,
-        errorCode: findError.code,
-      });
-    }
-
-    if (existing) {
-      console.log('[import-commit] Found existing list:', {
-        listName: trimmed,
-        foundName: existing.name,
-        listId: existing.id,
-        namesMatch: existing.name === trimmed,
-        source: 'database',
-      });
-      listCache.set(trimmed, existing.id);
-      return existing.id;
-    }
-
-    // TODO: Name mismatch - the existing list might have a different name format
-    // (e.g., "Main List" in DB vs "main list" in Excel, or extra spaces)
-    // Consider querying all lists for the org and doing a case-insensitive match
-    console.log('[import-commit] No existing list found, creating new list:', {
-      listName: trimmed,
-      organizationId: orgId,
-    });
-
-    // Create new list if not found
-    const { data: created, error: createError } = await supabase
-      .from('container_lists')
-      .insert({
-        name: trimmed,
-        organization_id: orgId,
-      })
-      .select('id, name')
-      .single();
-
-    if (createError || !created) {
-      logger.error('Failed to create list', { name: trimmed, error: createError });
-      console.error('[import-commit] Failed to create list:', {
-        listName: trimmed,
-        error: createError?.message,
-        errorCode: createError?.code,
-      });
-      listCache.set(trimmed, null);
-      return defaultListId;
-    }
-
-    console.log('[import-commit] Created new list:', {
-      listName: trimmed,
-      createdName: created.name,
-      listId: created.id,
-      source: 'new_creation',
-    });
-
-    listCache.set(trimmed, created.id);
-    return created.id;
-  }
-
   // Build payloads
   const payloads = [];
   const errors: Array<{ index: number; message: string }> = [];
 
   // Log batch-level info
-  console.log('[import-commit] Starting batch processing:', {
+  logger.info('[import-commit] Starting batch processing:', {
     totalRows: rows.length,
     organizationId: orgId,
     defaultListId,
   });
 
+  // All rows use the same list_id (from user's active list / current_list_id)
+  // list_name from input is ignored and treated as metadata only
+  const listId = defaultListId;
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
-      // Log row-level list_name handling
-      if (i === 0 || i < 5 || (i % 100 === 0)) {
-        console.log('[import-commit] Processing row:', {
-          index: i,
-          rawListName: row.list_name,
-          hasListName: !!row.list_name,
-        });
-      }
-      const listId = await resolveListId(row.list_name);
 
       const payload: any = {
         container_no: String(row.container_no || '').trim().toUpperCase(),

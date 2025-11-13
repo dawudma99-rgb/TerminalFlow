@@ -12,6 +12,7 @@ import { IMPORT_FIELD_MAP } from '@/lib/import/fields';
 import { autoSuggestMapping, coerceByType } from '@/lib/import/header-map';
 import { validateBatch } from '@/lib/import/validate';
 import { commitImport } from '@/lib/data/import-commit';
+import { logger } from '@/lib/utils/logger';
 
 export async function POST(req: Request) {
   try {
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
       commit,
     });
   } catch (err: any) {
-    console.error('[import-commit] Unexpected error:', err);
+    logger.error('[import-commit] Unexpected error:', err);
     return NextResponse.json(
       { 
         error: 'Unexpected server error', 

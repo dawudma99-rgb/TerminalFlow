@@ -28,6 +28,7 @@ import { updateContainer } from '@/lib/data/containers-actions'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -423,9 +424,12 @@ export function ContainerTable({
       </Table>
 
       <Dialog open={isNoteDialogOpen} onOpenChange={(open) => (open ? setIsNoteDialogOpen(true) : handleCloseNote())}>
-        <DialogContent>
+        <DialogContent aria-describedby="edit-note-dialog-description">
           <DialogHeader>
             <DialogTitle>Edit Note</DialogTitle>
+            <DialogDescription id="edit-note-dialog-description">
+              Add or update notes for this container.
+            </DialogDescription>
           </DialogHeader>
           <textarea
             value={noteDraft}

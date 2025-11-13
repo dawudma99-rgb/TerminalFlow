@@ -27,7 +27,7 @@ export default function ProfilePage() {
 
     async function loadOrg() {
       if (!profile) return
-      console.log('[profile-page] Fetching organization for', profile.organization_id)
+      logger.debug('[profile-page] Fetching organization for', { organizationId: profile.organization_id })
       try {
         if (profile.organization_id) {
           const orgData = await getOrganization(profile.organization_id)

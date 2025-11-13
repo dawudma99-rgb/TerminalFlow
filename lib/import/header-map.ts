@@ -17,7 +17,6 @@ const SYNONYMS: Synonyms = {
   gate_out_date: ['gate out','gate-out','outgate','out gate','departed terminal'],
   empty_return_date: ['empty return','empty returned','return empty','empty in','emptied'],
   notes: ['notes','remarks','comments','memo'],
-  list_name: ['list','list name','sheet list','bucket'], // optional
 };
 
 // A small score: exact match highest, contains middle, synonym set match good.

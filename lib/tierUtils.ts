@@ -8,6 +8,8 @@
 
 const DEBUG = false
 
+import { logger } from '@/lib/utils/logger'
+
 /**
  * Represents a single tier in a tiered rate structure
  */
@@ -45,7 +47,7 @@ export function calculateTieredFees(
 ): number {
   // Debug: Log initial inputs
   if (DEBUG && process.env.NODE_ENV === 'development') {
-    console.log('[TierCalc]', {
+    logger.debug('[TierCalc]', {
       daysOverdue,
       tiers,
       flatRate,
@@ -58,7 +60,7 @@ export function calculateTieredFees(
   if (!Array.isArray(tiers) || tiers.length === 0) {
     const flatRateTotal = (daysOverdue > 0 && flatRate) ? daysOverdue * flatRate : 0
     if (DEBUG && process.env.NODE_ENV === 'development') {
-      console.log('[TierCalc] Using flat rate', { daysOverdue, flatRate, total: flatRateTotal })
+      logger.debug('[TierCalc] Using flat rate', { daysOverdue, flatRate, total: flatRateTotal })
     }
     return flatRateTotal
   }
@@ -105,7 +107,7 @@ export function calculateTieredFees(
   }
 
   if (DEBUG && process.env.NODE_ENV === 'development') {
-    console.log('[TierCalc] TOTAL =', total, { daysOverdue, remainingDays })
+    logger.debug('[TierCalc] TOTAL =', { total, daysOverdue, remainingDays })
   }
   return total
 }

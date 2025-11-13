@@ -23,7 +23,6 @@ export const IMPORT_FIELDS: ImportField[] = [
   { key: 'gate_out_date', label: 'Gate Out', type: 'date' },
   { key: 'empty_return_date', label: 'Empty Return', type: 'date' },
   { key: 'notes', label: 'Notes', type: 'string' },
-  { key: 'list_name', label: 'List Name (optional)', type: 'string', notes: 'If provided, import will resolve/create and use this list' },
 ];
 
 // Quick index by key

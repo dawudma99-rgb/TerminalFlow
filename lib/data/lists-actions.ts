@@ -124,7 +124,6 @@ export async function setActiveList(id: string | null): Promise<void> {
   
   // Force session validation by calling getSession() first
   // This ensures the JWT is loaded and attached to the client for RLS checks
-  console.log('[setActiveList] Step 1: Loading session from cookies...')
   const { data: { session }, error: sessionError } = await supabase.auth.getSession()
   
   if (sessionError) {
@@ -137,12 +136,6 @@ export async function setActiveList(id: string | null): Promise<void> {
     throw new Error('User authentication missing in server action — JWT not attached')
   }
   
-  console.log('[setActiveList] Step 2: Session loaded, JWT present:', {
-    hasAccessToken: !!session.access_token,
-    tokenLength: session.access_token?.length,
-    userId: session.user?.id,
-  })
-  
   logger.info('[setActiveList] Session validated:', {
     hasSession: true,
     hasAccessToken: true,
@@ -151,7 +144,6 @@ export async function setActiveList(id: string | null): Promise<void> {
   })
   
   // Validate user exists - this also ensures auth.uid() will be available for RLS
-  console.log('[setActiveList] Step 3: Getting user from JWT...')
   const { data: { user }, error: getUserError } = await supabase.auth.getUser()
   
   if (getUserError) {
@@ -165,7 +157,6 @@ export async function setActiveList(id: string | null): Promise<void> {
   }
   
   const userId = user.id
-  console.log('[setActiveList] Step 4: User ID from auth.getUser():', userId)
   
   logger.info('[setActiveList] User validated:', {
     userId: user.id,
@@ -173,7 +164,6 @@ export async function setActiveList(id: string | null): Promise<void> {
   })
 
   // Verify profile exists and matches user ID
-  console.log('[setActiveList] Step 5: Verifying profile exists with matching ID...')
   const { data: existingProfile, error: profileCheckError } = await supabase
     .from('profiles')
     .select('id, current_list_id')
@@ -193,13 +183,6 @@ export async function setActiveList(id: string | null): Promise<void> {
     logger.error('[setActiveList] Profile not found for user:', userId)
     throw new Error(`Profile not found for user ${userId}`)
   }
-
-  console.log('[setActiveList] Step 6: Profile verified:', {
-    profileId: existingProfile.id,
-    matchesUserId: existingProfile.id === userId,
-    currentListId: existingProfile.current_list_id,
-    targetListId: id,
-  })
 
   const orgId = await getOrgId(supabase)
 
@@ -231,11 +214,9 @@ export async function setActiveList(id: string | null): Promise<void> {
   }
 
   // Update the user's profile
-  // Step 6.5: Explicitly set the session on the client to ensure JWT is attached
-  console.log('[setActiveList] Step 6.5: Setting session explicitly on client to attach JWT...')
-  
+  // Explicitly set the session on the client to ensure JWT is attached
   if (!session?.access_token) {
-    console.error('[setActiveList] No access token found in session')
+    logger.error('[setActiveList] No access token found in session')
     throw new Error('No access token found in session')
   }
 
@@ -246,16 +227,9 @@ export async function setActiveList(id: string | null): Promise<void> {
   })
 
   if (setSessionError) {
-    console.error('[setActiveList] Failed to set session:', setSessionError)
+    logger.error('[setActiveList] Failed to set session:', setSessionError)
     throw new Error(`Failed to set session: ${setSessionError.message}`)
   }
-
-  console.log('[setActiveList] Step 7: Session explicitly set, executing UPDATE query with:', {
-    profileId: userId,
-    newCurrentListId: id,
-    authUidShouldEqual: userId,
-    jwtAttached: true,
-  })
   
   logger.info('[setActiveList] Attempting profile update:', {
     profileId: userId,
@@ -276,17 +250,6 @@ export async function setActiveList(id: string | null): Promise<void> {
     .single()
 
   if (error) {
-    console.error('[setActiveList] UPDATE query failed:', {
-      errorMessage: error.message,
-      errorCode: error.code,
-      errorDetails: error.details,
-      errorHint: error.hint,
-      userId,
-      profileId: existingProfile.id,
-      authUidMatches: existingProfile.id === userId,
-      jwtWasSet: true,
-    })
-    
     logger.error('[setActiveList] Profile update failed:', {
       error: error.message,
       errorCode: error.code,
@@ -304,11 +267,6 @@ export async function setActiveList(id: string | null): Promise<void> {
     })
     throw new Error(`Supabase setActiveList error: ${error.message}`)
   }
-
-  console.log('[setActiveList] ✅ Step 8: Profile update succeeded with authenticated client', {
-    updatedProfileId: updatedProfile?.id,
-    newCurrentListId: updatedProfile?.current_list_id,
-  })
 
   logger.info('[setActiveList] Profile update successful', {
     updatedProfileId: updatedProfile?.id,
