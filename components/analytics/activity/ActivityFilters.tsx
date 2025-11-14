@@ -15,15 +15,22 @@ export interface ActivityFilters {
   type: string
   range: string
   user: string
+  container: string
+}
+
+interface ContainerOption {
+  id: string
+  label: string
 }
 
 interface ActivityFiltersProps {
   filters: ActivityFilters
   onChange: (filters: ActivityFilters) => void
   availableUsers: string[]
+  availableContainers: ContainerOption[]
 }
 
-export function ActivityFilters({ filters, onChange, availableUsers }: ActivityFiltersProps) {
+export function ActivityFilters({ filters, onChange, availableUsers, availableContainers }: ActivityFiltersProps) {
   const handleChange = (key: keyof ActivityFilters, value: string) => {
     onChange({
       ...filters,
@@ -32,7 +39,7 @@ export function ActivityFilters({ filters, onChange, availableUsers }: ActivityF
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {/* Search */}
       <div className="space-y-2">
         <Label htmlFor="activity-search" className="text-sm font-medium">
@@ -100,6 +107,26 @@ export function ActivityFilters({ filters, onChange, availableUsers }: ActivityF
             {availableUsers.map((user) => (
               <SelectItem key={user} value={user}>
                 {user}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Container */}
+      <div className="space-y-2">
+        <Label htmlFor="activity-container" className="text-sm font-medium">
+          Container
+        </Label>
+        <Select value={filters.container} onValueChange={(value) => handleChange('container', value)}>
+          <SelectTrigger id="activity-container">
+            <SelectValue placeholder="All containers" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All containers</SelectItem>
+            {availableContainers.map((container) => (
+              <SelectItem key={container.id} value={container.id}>
+                {container.label}
               </SelectItem>
             ))}
           </SelectContent>

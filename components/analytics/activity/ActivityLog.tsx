@@ -10,7 +10,7 @@ import { ActivityActions } from './ActivityActions'
 import { fetchHistory, type HistoryEvent } from '@/lib/data/history-actions'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export function ActivityLog() {
   const [history, setHistory] = useState<HistoryEvent[]>([])
@@ -18,11 +18,17 @@ export function ActivityLog() {
   const [error, setError] = useState<Error | null>(null)
   const [page, setPage] = useState(1)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // containerId in the URL is used to pre-filter history when coming from the Containers page
+  const containerIdFromUrl = searchParams.get('containerId')
+  
   const [filters, setFilters] = useState<ActivityFiltersType>({
     search: '',
     type: 'all',
     range: 'all',
     user: 'all',
+    container: containerIdFromUrl || 'all',
   })
 
   const pageSize = 10
@@ -53,6 +59,21 @@ export function ActivityLog() {
       }
     })
     return Array.from(users).sort()
+  }, [history])
+
+  // Extract unique containers from history
+  const availableContainers = useMemo(() => {
+    const containerMap = new Map<string, { id: string; label: string }>()
+    history.forEach((event) => {
+      if (event.container_id && !containerMap.has(event.container_id)) {
+        const label = event.container_no || `${event.container_id.substring(0, 8)}…`
+        containerMap.set(event.container_id, {
+          id: event.container_id,
+          label,
+        })
+      }
+    })
+    return Array.from(containerMap.values()).sort((a, b) => a.label.localeCompare(b.label))
   }, [history])
 
   // Apply filters
@@ -106,6 +127,11 @@ export function ActivityLog() {
     // User filter
     if (filters.user !== 'all') {
       filtered = filtered.filter((event) => event.user === filters.user)
+    }
+
+    // Container filter
+    if (filters.container !== 'all') {
+      filtered = filtered.filter((event) => event.container_id === filters.container)
     }
 
     return filtered
@@ -173,6 +199,7 @@ export function ActivityLog() {
           filters={filters}
           onChange={setFilters}
           availableUsers={availableUsers}
+          availableContainers={availableContainers}
         />
         <ActivityTable events={paginatedEvents} />
         <ActivityPagination

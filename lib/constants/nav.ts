@@ -5,6 +5,7 @@
  */
 
 import type { ComponentType } from 'react'
+import { Clock } from 'lucide-react'
 
 import { isActiveRoute, normalizePath } from '../utils/navigation'
 
@@ -47,6 +48,11 @@ export const APP_NAV_ITEMS = [
   {
     label: 'Analytics',
     href: '/dashboard/analytics',
+    section: 'analytics',
+  },
+  {
+    label: 'History',
+    href: '/dashboard/history',
     section: 'analytics',
   },
   {
