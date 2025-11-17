@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      alerts: {
+        Row: {
+          id: string
+          organization_id: string
+          container_id: string
+          list_id: string | null
+          event_type: string
+          severity: string
+          title: string
+          message: string | null
+          metadata: Json | null
+          created_by_user_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          container_id: string
+          list_id?: string | null
+          event_type: string
+          severity?: string
+          title: string
+          message?: string | null
+          metadata?: Json | null
+          created_by_user_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          container_id?: string
+          list_id?: string | null
+          event_type?: string
+          severity?: string
+          title?: string
+          message?: string | null
+          metadata?: Json | null
+          created_by_user_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_container_id_fkey"
+            columns: ["container_id"]
+            isOneToOne: false
+            referencedRelation: "containers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "container_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       carrier_defaults: {
         Row: {
           carrier_name: string

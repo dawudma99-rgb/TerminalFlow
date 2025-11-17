@@ -9,6 +9,7 @@ import { getOrganization } from '@/lib/data/user-actions'
 import { useTheme } from 'next-themes'
 import { LogOut, Moon, Sun } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
+import { AlertsBell } from '@/components/alerts/AlertsBell'
 
 // Memoized to prevent unnecessary re-renders that trigger useAuth calls
 export const Topbar = memo(function Topbar() {
@@ -56,6 +57,7 @@ export const Topbar = memo(function Topbar() {
       <div className="flex items-center space-x-3">
         {!loading && (
           <>
+            <AlertsBell />
             <span className="text-sm text-muted-foreground">
               {profile?.email || user?.email}
             </span>

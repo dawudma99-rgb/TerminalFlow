@@ -10,6 +10,7 @@ import {
   type ContainerMilestone,
 } from '@/lib/utils/milestones'
 import { logger } from '@/lib/utils/logger'
+import { createAlertsForContainerChange } from '@/lib/data/alerts-logic'
 
 export type ContainerRecord = Database['public']['Tables']['containers']['Row']
 export type ContainerInsert = Database['public']['Tables']['containers']['Insert']
@@ -236,6 +237,19 @@ export async function updateContainer(id: string, fields: ContainerUpdateInput) 
     fields: Object.keys(safeFields),
   })
 
+  // Fetch the previous container state before updating (for alert detection)
+  const { data: previousContainer, error: fetchError } = await supabase
+    .from('containers')
+    .select('*')
+    .eq('id', id)
+    .eq('organization_id', profile.organization_id)
+    .single()
+
+  if (fetchError) {
+    logger.error('updateContainer failed to fetch previous container', { id, fetchError })
+    // Continue with update even if we can't fetch previous state (alerts will be skipped)
+  }
+
   const { data, error } = await supabase
     .from('containers')
     .update(safeFields)
@@ -249,6 +263,24 @@ export async function updateContainer(id: string, fields: ContainerUpdateInput) 
     const details = error.details ? ` Details: ${error.details}` : ''
     const hint = error.hint ? ` Hint: ${error.hint}` : ''
     throw new Error(`Supabase updateContainer error: ${error.message}.${details}${hint}`)
+  }
+
+  // Create alerts for state changes (after successful update)
+  if (data) {
+    try {
+      await createAlertsForContainerChange({
+        supabase,
+        previousContainer: previousContainer ?? null,
+        newContainer: data,
+        currentUserId: user.id,
+      })
+    } catch (alertError) {
+      // Log but don't throw - we don't want to break the main update if alerts fail
+      logger.error('updateContainer failed to create alerts', {
+        id,
+        alertError: alertError instanceof Error ? alertError.message : String(alertError),
+      })
+    }
   }
 
   revalidatePath('/dashboard')
