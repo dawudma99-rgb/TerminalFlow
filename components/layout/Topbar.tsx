@@ -10,6 +10,7 @@ import { useTheme } from 'next-themes'
 import { LogOut, Moon, Sun } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 import { AlertsBell } from '@/components/alerts/AlertsBell'
+import { PortflowLogo } from '@/components/ui/PortflowLogo'
 
 // Memoized to prevent unnecessary re-renders that trigger useAuth calls
 export const Topbar = memo(function Topbar() {
@@ -49,7 +50,7 @@ export const Topbar = memo(function Topbar() {
   return (
     <header className="bg-card border-b flex items-center justify-between px-6 py-3">
       <div className="flex items-center space-x-3">
-        <div className="text-lg font-semibold">📦 D&D Copilot</div>
+        <PortflowLogo size="md" />
         {orgName && (
           <span className="text-sm text-muted-foreground">({orgName})</span>
         )}

@@ -1,65 +1,69 @@
 import clsx from "clsx"
 import Link from "next/link"
-import { Badge } from "@/components/ui/badge"
 import type { ContainerRecordWithComputed } from "@/lib/data/containers-actions"
 
 type AttentionCardProps = {
-  containers: Array<Pick<ContainerRecordWithComputed, "id" | "container_no" | "status" | "days_left">>
+  containers: Array<Pick<ContainerRecordWithComputed, "id" | "container_no" | "status" | "days_left" | "port">>
   className?: string
 }
 
-const statusStyles: Record<string, string> = {
-  Overdue: "bg-red-50 text-[#DC2626] border border-red-100",
-  Warning: "bg-amber-50 text-[#D97706] border border-amber-100",
-  Safe: "bg-emerald-50 text-[#059669] border border-emerald-100",
-}
+/**
+ * Formats a human-readable description for a container based on its status and days_left.
+ * Uses simple, non-technical language for forwarders.
+ */
+function formatContainerDescription(container: Pick<ContainerRecordWithComputed, "status" | "days_left" | "port">): string {
+  const status = container.status
+  const daysLeft = container.days_left
+  const port = container.port || 'the port'
 
-function getDaysColor(status: string | null, daysLeft: number | null) {
-  if (daysLeft == null) return "text-[#6B7280]"
-  if (daysLeft < 0) return "text-[#DC2626]"
-  if (status === "Warning") return "text-[#D97706]"
-  if (status === "Safe") return "text-[#059669]"
-  return "text-[#6B7280]"
+  if (status === 'Overdue' && daysLeft !== null && daysLeft < 0) {
+    const daysOverdue = Math.abs(daysLeft)
+    return `Overdue by ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} at ${port}`
+  }
+
+  if (status === 'Warning' && daysLeft !== null && daysLeft > 0) {
+    return `LFD in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} at ${port}`
+  }
+
+  // Fallback for other statuses
+  if (daysLeft !== null) {
+    if (daysLeft < 0) {
+      const daysOverdue = Math.abs(daysLeft)
+      return `Overdue by ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} at ${port}`
+    }
+    return `LFD in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} at ${port}`
+  }
+
+  return `At ${port}`
 }
 
 export function AttentionCard({ containers, className }: AttentionCardProps) {
   return (
     <div className={clsx("bg-white rounded-md border border-[#E5E7EB] p-6 shadow", className)}>
-      <h2 className="text-lg font-semibold text-[#111827] mb-1">Attention Needed</h2>
-      <p className="text-sm text-[#6B7280] mb-4">Containers approaching demurrage or detention deadlines.</p>
+      <h2 className="text-lg font-semibold text-[#111827] mb-1">Issues & Deadlines</h2>
+      <p className="text-sm text-[#6B7280] mb-4">Containers that need your attention right now.</p>
 
       {containers.length === 0 ? (
-        <p className="text-sm text-[#6B7280]">All monitored containers are currently within safe thresholds.</p>
+        <p className="text-sm text-[#6B7280]">All containers are currently within safe thresholds.</p>
       ) : (
-        <div className="divide-y divide-[#E5E7EB]">
+        <div className="space-y-4">
           {containers.map((container) => {
-            const status = container.status ?? "Unknown"
-            const statusLabel = status === "Warning" ? "At Risk" : status
+            const containerNo = container.container_no || "Unknown Container"
+            const description = formatContainerDescription(container)
+
             return (
-              <div key={container.id} className="flex justify-between items-center py-3">
-                <span className="font-medium text-[#111827]">{container.container_no || "Unnamed Container"}</span>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    className={clsx(
-                      "rounded-sm px-2 py-0.5 text-xs font-medium",
-                      statusStyles[status] ?? "bg-gray-100 text-[#6B7280] border border-gray-200"
-                    )}
-                  >
-                    {statusLabel}
-                  </Badge>
-                  <span className={clsx("font-semibold", getDaysColor(container.status ?? null, container.days_left ?? null))}>
-                    {container.days_left ?? "—"}
-                  </span>
-                </div>
+              <div key={container.id} className="border-b border-[#E5E7EB] last:border-0 pb-3 last:pb-0">
+                <div className="font-semibold text-[#111827] mb-1">{containerNo}</div>
+                <div className="text-sm text-[#374151]">{description}</div>
               </div>
             )
           })}
         </div>
       )}
 
-      <div className="pt-3 text-right">
+      <div className="pt-4 mt-4 border-t border-[#E5E7EB]">
         <Link href="/dashboard/containers" className="text-sm text-[#007EA7] hover:underline font-medium">
-          View All →
+          View all containers →
         </Link>
       </div>
     </div>

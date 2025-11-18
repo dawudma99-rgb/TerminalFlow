@@ -55,8 +55,10 @@ export async function createAlertsForContainerChange(params: {
       list_id: newContainer.list_id,
       event_type: 'became_warning',
       severity: 'warning',
-      title: `Container ${newContainer.container_no} is now WARNING`,
-      message: `Container ${newContainer.container_no} at ${newContainer.port} has ${newDerived.days_left ?? 'unknown'} days left until demurrage charges begin.`,
+      title: `Free time running out`,
+      message: newDerived.days_left !== null && newContainer.port
+        ? `Container ${newContainer.container_no} at ${newContainer.port} has ${newDerived.days_left} free day${newDerived.days_left === 1 ? '' : 's'} left.`
+        : `This container is running low on free days.`,
       metadata: {
         previous_status: oldStatus,
         new_status: newStatus,
@@ -80,8 +82,10 @@ export async function createAlertsForContainerChange(params: {
       list_id: newContainer.list_id,
       event_type: 'became_overdue',
       severity: 'critical',
-      title: `Container ${newContainer.container_no} is now OVERDUE`,
-      message: `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue. Demurrage charges have started.`,
+      title: `Container is now overdue`,
+      message: daysOverdue > 0 && newContainer.port
+        ? `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time.`
+        : `Free time has ended — charges may now apply.`,
       metadata: {
         previous_status: oldStatus,
         new_status: newStatus,
@@ -111,8 +115,10 @@ export async function createAlertsForContainerChange(params: {
       list_id: newContainer.list_id,
       event_type: 'demurrage_started',
       severity: 'critical',
-      title: `Demurrage charges started for ${newContainer.container_no}`,
-      message: `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue. Demurrage fees are now being charged.`,
+      title: `Demurrage now being charged`,
+      message: daysOverdue > 0 && newContainer.port
+        ? `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time.`
+        : `This container is now incurring demurrage at the port.`,
       metadata: {
         previous_days_left: oldDaysLeft,
         new_days_left: newDaysLeft,
@@ -140,8 +146,10 @@ export async function createAlertsForContainerChange(params: {
       list_id: newContainer.list_id,
       event_type: 'detention_started',
       severity: 'critical',
-      title: `Detention charges started for ${newContainer.container_no}`,
-      message: `Container ${newContainer.container_no} at ${newContainer.port} has ${newDetentionDays} chargeable detention day${newDetentionDays !== 1 ? 's' : ''}. Detention fees are now being charged.`,
+      title: `Detention now being charged`,
+      message: newDetentionDays !== null && newDetentionDays > 0
+        ? `Container ${newContainer.container_no} has been out ${newDetentionDays} day${newDetentionDays === 1 ? '' : 's'} beyond free time.`
+        : `This container may now incur detention charges.`,
       metadata: {
         previous_detention_days: oldDetentionDays,
         new_detention_days: newDetentionDays,
@@ -167,8 +175,10 @@ export async function createAlertsForContainerChange(params: {
       list_id: newContainer.list_id,
       event_type: 'container_closed',
       severity: 'info',
-      title: `Container ${newContainer.container_no} has been closed`,
-      message: `Container ${newContainer.container_no} at ${newContainer.port} has been marked as closed.`,
+      title: `Container completed`,
+      message: newContainer.port
+        ? `Container ${newContainer.container_no} at ${newContainer.port} is closed — no further action needed.`
+        : `This container is closed — no further action needed.`,
       metadata: {
         container_no: newContainer.container_no,
         port: newContainer.port,
