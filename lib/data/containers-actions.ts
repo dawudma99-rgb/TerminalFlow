@@ -11,6 +11,7 @@ import {
 } from '@/lib/utils/milestones'
 import { logger } from '@/lib/utils/logger'
 import { createAlertsForContainerChange } from '@/lib/data/alerts-logic'
+import { ensureMainListForCurrentOrg } from '@/lib/data/lists-actions'
 
 export type ContainerRecord = Database['public']['Tables']['containers']['Row']
 export type ContainerInsert = Database['public']['Tables']['containers']['Insert']
@@ -90,21 +91,12 @@ export async function insertContainer(
   // Get the current user's organization_id
   const orgId = await getOrgId(supabase)
 
-  // If no listId provided, fetch from profile
+  // If no listId provided, ensure Main List exists and get active list
   let finalListId = listId
   if (!finalListId) {
-    const userId = await getUserId(supabase)
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('current_list_id')
-      .eq('id', userId)
-      .single()
-
-    if (profileError) {
-      throw new Error(`Failed to fetch profile: ${profileError.message}`)
-    }
-
-    finalListId = profile?.current_list_id ?? null
+    // Ensure Main List exists and current_list_id is set
+    const { activeListId } = await ensureMainListForCurrentOrg()
+    finalListId = activeListId
   }
 
   // Normalize empty strings to null for pol and pod
@@ -131,7 +123,7 @@ export async function insertContainer(
   const containerWithOrg = {
     ...containerWithMilestone,
     organization_id: orgId,
-    list_id: finalListId, // Always set list_id (can be null if no active list)
+    list_id: finalListId, // Should never be null after ensureMainListForCurrentOrg()
   }
 
   logger.debug('[insertContainer] payload', {

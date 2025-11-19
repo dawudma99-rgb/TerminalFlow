@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
 import { logger } from '@/lib/utils/logger'
+import { sendAlertEmail } from '@/lib/email/sendAlertEmail'
 
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
@@ -217,6 +218,108 @@ export async function createAlertsForContainerChange(params: {
         container_id: newContainer.id,
         alert_count: alertsToCreate.length,
       })
+    }
+
+    // Send emails for high-value alerts (best-effort, non-blocking)
+    if (alertsToCreate.length > 0) {
+      // Filter to only critical events that warrant email notifications
+      const emailWorthyAlerts = alertsToCreate.filter(
+        (alert) =>
+          alert.event_type === 'became_overdue' ||
+          alert.event_type === 'demurrage_started' ||
+          alert.event_type === 'detention_started'
+      )
+
+      if (emailWorthyAlerts.length > 0) {
+        // Use the first email-worthy alert for now (can be enhanced later to send per alert)
+        const alert = emailWorthyAlerts[0]
+        const metadata = alert.metadata as any
+        const containerNo = metadata?.container_no || newContainer.container_no || 'Unknown'
+        const port = metadata?.port || newContainer.port || null
+
+        try {
+          // Fetch all users in the same organization
+          const { data: recipients, error: recipientsError } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('organization_id', newContainer.organization_id)
+            .not('email', 'is', null)
+
+          if (recipientsError) {
+            logger.error('[createAlertsForContainerChange] Failed to fetch recipients', {
+              container_id: newContainer.id,
+              error: recipientsError.message,
+            })
+            return // Don't block on email failures
+          }
+
+          if (!recipients || recipients.length === 0) {
+            if (process.env.NODE_ENV === 'development') {
+              logger.debug('[createAlertsForContainerChange] No recipients found for email', {
+                organization_id: newContainer.organization_id,
+              })
+            }
+            return
+          }
+
+          // Build email subject and body based on event type
+          let subject: string
+          let textBody: string
+
+          if (alert.event_type === 'became_overdue') {
+            const daysOverdue = metadata?.days_overdue ?? 0
+            subject = `Container is now overdue – ${containerNo}`
+            textBody = `Container ${containerNo} at ${port ?? 'unknown location'} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} past free time.\n\nAlert: Container is now overdue.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
+          } else if (alert.event_type === 'demurrage_started') {
+            subject = `Demurrage now being charged – ${containerNo}`
+            textBody = `Demurrage is now being charged for container ${containerNo} at ${port ?? 'unknown location'}.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
+          } else if (alert.event_type === 'detention_started') {
+            subject = `Detention now being charged – ${containerNo}`
+            textBody = `Detention is now being charged for container ${containerNo}.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
+          } else {
+            // Fallback (shouldn't happen due to filter above)
+            subject = `${alert.title || 'Alert'} – ${containerNo}`
+            textBody = `${alert.message || 'An alert has been created for this container.'}\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
+          }
+
+          // Send emails to all recipients (best-effort, non-blocking)
+          const emailPromises = recipients
+            .map((r) => r.email)
+            .filter((email): email is string => Boolean(email))
+            .map(async (email) => {
+              const result = await sendAlertEmail({
+                to: email,
+                subject,
+                text: textBody,
+              })
+
+              if (!result.success) {
+                logger.error('[createAlertsForContainerChange] Failed to send alert email', {
+                  to: email,
+                  container_id: newContainer.id,
+                  error: result.error,
+                })
+              }
+            })
+
+          // Wait for all emails to complete (but don't throw on failures)
+          await Promise.allSettled(emailPromises)
+
+          if (process.env.NODE_ENV === 'development') {
+            logger.debug('[createAlertsForContainerChange] Email sending completed', {
+              container_id: newContainer.id,
+              recipient_count: recipients.length,
+              event_type: alert.event_type,
+            })
+          }
+        } catch (emailError) {
+          // Log but don't throw - email failures should never break container updates
+          logger.error('[createAlertsForContainerChange] Exception sending alert emails', {
+            container_id: newContainer.id,
+            error: emailError instanceof Error ? emailError.message : String(emailError),
+          })
+        }
+      }
     }
   }
 }

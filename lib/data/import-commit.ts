@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { logger } from '@/lib/utils/logger';
+import { ensureMainListForCurrentOrg } from '@/lib/data/lists-actions';
 
 async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -14,12 +15,6 @@ async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Pro
     .single();
   if (error || !profile?.organization_id) throw new Error('User profile not found');
   return profile.organization_id;
-}
-
-async function getUserId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-  return user.id;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -47,20 +42,10 @@ export async function commitImport(rows: Array<Record<string, any>>): Promise<{
 }> {
   const supabase = await createClient();
   const orgId = await getOrgId(supabase);
-  const userId = await getUserId(supabase);
 
-  // Get current_list_id from profile
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('current_list_id')
-    .eq('id', userId)
-    .single();
-
-  if (profileError) {
-    throw new Error(`Failed to fetch profile: ${profileError.message}`);
-  }
-
-  const defaultListId = profile?.current_list_id ?? null;
+  // Ensure Main List exists and get active list ID
+  const { activeListId } = await ensureMainListForCurrentOrg();
+  const defaultListId = activeListId;
 
   // Build payloads
   const payloads = [];

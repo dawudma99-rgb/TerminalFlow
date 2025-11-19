@@ -114,6 +114,173 @@ export async function deleteList(id: string): Promise<void> {
   revalidatePath('/dashboard/containers')
 }
 
+// --- Ensure Main List Exists ---
+/**
+ * Ensures the current organization has at least one list (Main List) and that
+ * the user's current_list_id points to a valid list.
+ * 
+ * This is idempotent and safe to call multiple times.
+ * 
+ * Steps:
+ * 1. Get current user and profile
+ * 2. Fetch all lists for the org
+ * 3. If no lists exist: create "Main List" and set current_list_id
+ * 4. If lists exist but current_list_id is null/invalid: set to oldest list or "Main List"
+ * 
+ * @returns {Promise<{ lists: ListRecord[], activeListId: string | null }>}
+ */
+export async function ensureMainListForCurrentOrg(): Promise<{
+  lists: ListRecord[]
+  activeListId: string | null
+}> {
+  const supabase = await createClient()
+  
+  // Get current user
+  const { data: { user }, error: getUserError } = await supabase.auth.getUser()
+  if (getUserError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  const userId = user.id
+  
+  // Get user's profile with current_list_id
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, organization_id, current_list_id')
+    .eq('id', userId)
+    .single()
+
+  if (profileError || !profile?.organization_id) {
+    throw new Error(`User profile not found: ${profileError?.message || 'no profile'}`)
+  }
+
+  const orgId = profile.organization_id
+  const currentListId = profile.current_list_id
+
+  // Fetch all lists for this org
+  const { data: existingLists, error: listsError } = await supabase
+    .from('container_lists')
+    .select('*')
+    .eq('organization_id', orgId)
+    .order('created_at', { ascending: true })
+
+  if (listsError) {
+    logger.error('[ensureMainListForCurrentOrg] Failed to fetch lists:', listsError)
+    throw new Error(`Failed to fetch lists: ${listsError.message}`)
+  }
+
+  const lists = existingLists || []
+
+  // Case 1: No lists exist - create Main List and set it as active
+  if (lists.length === 0) {
+    logger.info('[ensureMainListForCurrentOrg] No lists found, creating Main List', {
+      orgId,
+      userId,
+    })
+
+    const { data: newList, error: createError } = await supabase
+      .from('container_lists')
+      .insert({
+        name: 'Main List',
+        organization_id: orgId,
+      })
+      .select()
+      .single()
+
+    if (createError || !newList) {
+      logger.error('[ensureMainListForCurrentOrg] Failed to create Main List:', createError)
+      throw new Error(`Failed to create Main List: ${createError?.message || 'no data returned'}`)
+    }
+
+    // Update profile to set current_list_id to the new Main List
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        current_list_id: newList.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+
+    if (updateError) {
+      logger.error('[ensureMainListForCurrentOrg] Failed to set current_list_id:', updateError)
+      // Don't throw - list was created, just the profile update failed
+      // The list will be set as active on next successful ensureMainListForCurrentOrg call
+    } else {
+      logger.info('[ensureMainListForCurrentOrg] Created Main List and set as active', {
+        listId: newList.id,
+        userId,
+      })
+    }
+
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/containers')
+
+    return {
+      lists: [newList],
+      activeListId: newList.id,
+    }
+  }
+
+  // Case 2: Lists exist but current_list_id is null or invalid
+  const isValidListId = currentListId && lists.some((list) => list.id === currentListId)
+  
+  if (!isValidListId) {
+    // Find the best list to use (prefer "Main List", otherwise oldest)
+    let targetList = lists.find((list) => list.name === 'Main List')
+    if (!targetList) {
+      targetList = lists[0] // Oldest list
+    }
+
+    logger.info('[ensureMainListForCurrentOrg] Fixing current_list_id', {
+      orgId,
+      userId,
+      previousListId: currentListId,
+      newListId: targetList.id,
+      listName: targetList.name,
+    })
+
+    // Update profile to set current_list_id
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        current_list_id: targetList.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+
+    if (updateError) {
+      logger.error('[ensureMainListForCurrentOrg] Failed to update current_list_id:', updateError)
+      // Don't throw - just log the error
+    } else {
+      logger.info('[ensureMainListForCurrentOrg] Updated current_list_id', {
+        listId: targetList.id,
+        userId,
+      })
+    }
+
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/containers')
+
+    return {
+      lists,
+      activeListId: targetList.id,
+    }
+  }
+
+  // Case 3: Everything is already valid - no-op
+  logger.debug('[ensureMainListForCurrentOrg] No-op: lists and current_list_id are valid', {
+    orgId,
+    userId,
+    listCount: lists.length,
+    currentListId,
+  })
+
+  return {
+    lists,
+    activeListId: currentListId,
+  }
+}
+
 // --- Update Active List ---
 /**
  * Set the active list for the current user by updating their profile's current_list_id.

@@ -8,11 +8,10 @@
 
 import { logger } from '@/lib/utils/logger'
 import useSWR from 'swr'
-import { fetchLists, createList, deleteList, setActiveList, type ListRecord } from './lists-actions'
+import { fetchLists, createList, deleteList, setActiveList, ensureMainListForCurrentOrg, type ListRecord } from './lists-actions'
 import { useAuth } from '@/lib/auth/useAuth'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase/client'
 
 const fetcher = async () => {
   const data = await fetchLists()
@@ -54,40 +53,34 @@ export function useLists(): UseListsReturn {
   // Graceful loading state - prevent flickering while auth/org loads
   const isReady = !authLoading && !!orgId
 
-  // Auto-create default list if none exist and org is loaded
+  // Auto-create default list and fix current_list_id if needed
   useEffect(() => {
     if (authLoading || !orgId) return
 
     const ensureMainList = async () => {
       try {
-        // Check directly in Supabase if a Main List already exists for this org
-        const { data: existingLists, error } = await supabase
-          .from('container_lists')
-          .select('id')
-          .eq('organization_id', orgId)
-          .eq('name', 'Main List')
-          .limit(1)
-
-        if (error) {
-          logger.error('[useLists] Error checking for Main List:', error)
-          return
-        }
-
-        if (existingLists && existingLists.length > 0) {
-          logger.info('[useLists] Main List already exists, skipping auto-create')
-          return
-        }
-
-        logger.info('[useLists] No Main List found, creating one now')
-        await createList('Main List')
-        mutate()
+        logger.debug('[useLists] Ensuring Main List exists and current_list_id is set')
+        const result = await ensureMainListForCurrentOrg()
+        
+        // Update SWR cache with the resolved lists
+        await mutate(result.lists, { revalidate: false })
+        
+        // Refresh profile to get updated current_list_id
+        await refreshProfile()
+        
+        logger.debug('[useLists] Main List ensured', {
+          listCount: result.lists.length,
+          activeListId: result.activeListId,
+        })
       } catch (err) {
         logger.error('[useLists] Failed to ensure Main List:', err)
+        // Don't throw - let the app continue even if bootstrap fails
+        // UI components will show create button as fallback
       }
     }
 
     ensureMainList()
-  }, [authLoading, orgId, mutate])
+  }, [authLoading, orgId, mutate, refreshProfile])
 
   // Sync activeListId with profile changes (reduced logging)
   useEffect(() => {

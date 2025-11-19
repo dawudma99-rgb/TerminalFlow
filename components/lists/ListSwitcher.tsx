@@ -86,6 +86,21 @@ const handleDeleteList = async (listId: string) => {
     }
   }
 
+  const handleCreateFirstList = async () => {
+    setIsCreating(true)
+    try {
+      const newList = await createList('Main List')
+      await setActiveList(newList.id)
+      // Optimistically update containers cache
+      mutateSWR(['containers', newList.id])
+    } catch (error) {
+      logger.error('[ListSwitcher] Failed to create first list:', error)
+      // Error toast handled inside createList
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   // Loading state
   if (loading) {
     return (
@@ -95,11 +110,29 @@ const handleDeleteList = async (listId: string) => {
     )
   }
 
-  // No lists state (shouldn't happen due to auto-create, but handle gracefully)
+  // No lists state - show create button as safety net
   if (lists.length === 0) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">No lists available</span>
+        <span className="text-sm text-muted-foreground">No lists yet</span>
+        <Button
+          onClick={handleCreateFirstList}
+          disabled={isCreating}
+          size="sm"
+          variant="default"
+        >
+          {isCreating ? (
+            <>
+              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            <>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Create first list
+            </>
+          )}
+        </Button>
       </div>
     )
   }

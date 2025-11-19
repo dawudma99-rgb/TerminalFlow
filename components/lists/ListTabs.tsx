@@ -60,6 +60,19 @@ export function ListTabs() {
     }
   }
 
+  const handleCreateFirstList = async () => {
+    setIsCreating(true)
+    try {
+      const newList = await createList('Main List')
+      await setActiveList(newList.id)
+    } catch (error) {
+      logger.error('[ListTabs] Failed to create first list:', error)
+      // Error toast handled inside createList
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-12 w-full items-center justify-center border-b border-gray-200 bg-white">
@@ -69,7 +82,26 @@ export function ListTabs() {
   }
 
   if (lists.length === 0) {
-    return null
+    return (
+      <div className="flex h-10 items-center gap-2 rounded-md border border-[#D4D7DE] bg-white px-2 shadow-sm">
+        <span className="text-sm text-muted-foreground">No lists yet</span>
+        <Button
+          onClick={handleCreateFirstList}
+          disabled={isCreating}
+          size="sm"
+          className="h-7 text-xs"
+        >
+          {isCreating ? (
+            <>
+              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            'Create first list'
+          )}
+        </Button>
+      </div>
+    )
   }
 
   return (
