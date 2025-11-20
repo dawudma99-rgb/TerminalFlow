@@ -68,10 +68,35 @@ function formatDate(dateString?: string | null): string {
 }
 
 function StatusBadge({ status }: { status?: string | null }) {
+  // Safe: Green highlighted badge (same prominent style as overdue but different color)
+  if (status === 'Safe') {
+    return (
+      <Badge className="bg-[#10B981] text-white border-transparent font-semibold hover:bg-[#10B981]/90">
+        {status}
+      </Badge>
+    )
+  }
+
+  // Warning: Amber highlighted badge (same prominent style as overdue but different color)
+  if (status === 'Warning') {
+    return (
+      <Badge className="bg-[#F59E0B] text-white border-transparent font-semibold hover:bg-[#F59E0B]/90">
+        {status}
+      </Badge>
+    )
+  }
+
+  // Overdue: Red highlighted badge (already prominent)
+  if (status === 'Overdue') {
+    return (
+      <Badge variant="destructive">
+        {status}
+      </Badge>
+    )
+  }
+
+  // Closed and null states: muted style
   const badgeClass = clsx(
-    status === 'Safe' && 'bg-success text-success-foreground',
-    status === 'Warning' && 'bg-warning text-warning-foreground',
-    status === 'Overdue' && 'bg-destructive text-destructive-foreground',
     status === 'Closed' && 'bg-muted text-muted-foreground',
     !status && 'bg-muted text-muted-foreground'
   )

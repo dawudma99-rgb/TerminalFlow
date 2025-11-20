@@ -18,8 +18,7 @@ type ContainerRow = Database['public']['Tables']['containers']['Row']
  * 
  * Detects V1 events:
  * - became_warning: Safe/null → Warning
- * - became_overdue: !Overdue → Overdue
- * - demurrage_started: days_left >= 0 → days_left < 0
+ * - became_overdue: !Overdue → Overdue (includes demurrage starting)
  * - detention_started: detention_chargeable_days <= 0 → detention_chargeable_days > 0
  * - container_closed: is_closed false → true
  * 
@@ -73,7 +72,7 @@ export async function createAlertsForContainerChange(params: {
     })
   }
 
-  // 2) Became OVERDUE (cost started)
+  // 2) Became OVERDUE (cost started - demurrage begins when overdue)
   // Condition: previous status != 'Overdue' AND new status = 'Overdue'
   if (oldStatus !== 'Overdue' && newStatus === 'Overdue') {
     const daysOverdue = newDerived.days_left !== null ? Math.abs(newDerived.days_left) : 0
@@ -83,10 +82,10 @@ export async function createAlertsForContainerChange(params: {
       list_id: newContainer.list_id,
       event_type: 'became_overdue',
       severity: 'critical',
-      title: `Container is now overdue`,
+      title: 'Container is overdue – demurrage started',
       message: daysOverdue > 0 && newContainer.port
-        ? `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time.`
-        : `Free time has ended — charges may now apply.`,
+        ? `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time. Demurrage charges are now accruing.`
+        : `Free time has ended — demurrage charges may now apply.`,
       metadata: {
         previous_status: oldStatus,
         new_status: newStatus,
@@ -101,39 +100,7 @@ export async function createAlertsForContainerChange(params: {
     })
   }
 
-  // 3) Demurrage started
-  // Condition: previous days_left >= 0 AND new days_left < 0
-  const oldDaysLeft = oldDerived?.days_left ?? null
-  const newDaysLeft = newDerived.days_left
-  if (
-    oldDaysLeft !== null && oldDaysLeft >= 0 &&
-    newDaysLeft !== null && newDaysLeft < 0
-  ) {
-    const daysOverdue = Math.abs(newDaysLeft)
-    alertsToCreate.push({
-      organization_id: newContainer.organization_id,
-      container_id: newContainer.id,
-      list_id: newContainer.list_id,
-      event_type: 'demurrage_started',
-      severity: 'critical',
-      title: `Demurrage now being charged`,
-      message: daysOverdue > 0 && newContainer.port
-        ? `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time.`
-        : `This container is now incurring demurrage at the port.`,
-      metadata: {
-        previous_days_left: oldDaysLeft,
-        new_days_left: newDaysLeft,
-        days_overdue: daysOverdue,
-        container_no: newContainer.container_no,
-        port: newContainer.port,
-        milestone: newContainer.milestone,
-        lfd_date: newDerived.lfd_date,
-      },
-      created_by_user_id: currentUserId ?? null,
-    })
-  }
-
-  // 4) Detention started
+  // 3) Detention started
   // Condition: previous detention_chargeable_days <= 0 AND new detention_chargeable_days > 0
   const oldDetentionDays = oldDerived?.detention_chargeable_days ?? null
   const newDetentionDays = newDerived.detention_chargeable_days
@@ -226,7 +193,6 @@ export async function createAlertsForContainerChange(params: {
       const emailWorthyAlerts = alertsToCreate.filter(
         (alert) =>
           alert.event_type === 'became_overdue' ||
-          alert.event_type === 'demurrage_started' ||
           alert.event_type === 'detention_started'
       )
 
@@ -268,11 +234,8 @@ export async function createAlertsForContainerChange(params: {
 
           if (alert.event_type === 'became_overdue') {
             const daysOverdue = metadata?.days_overdue ?? 0
-            subject = `Container is now overdue – ${containerNo}`
-            textBody = `Container ${containerNo} at ${port ?? 'unknown location'} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} past free time.\n\nAlert: Container is now overdue.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
-          } else if (alert.event_type === 'demurrage_started') {
-            subject = `Demurrage now being charged – ${containerNo}`
-            textBody = `Demurrage is now being charged for container ${containerNo} at ${port ?? 'unknown location'}.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
+            subject = `Container overdue – demurrage started – ${containerNo}`
+            textBody = `Container ${containerNo} at ${port ?? 'unknown location'} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} past free time. Demurrage charges are now accruing.\n\nAlert: Container is overdue and demurrage has started.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
           } else if (alert.event_type === 'detention_started') {
             subject = `Detention now being charged – ${containerNo}`
             textBody = `Detention is now being charged for container ${containerNo}.\n\nYou can view this container and others in TerminalFlow:\nhttps://terminalflow.app/dashboard/alerts`
