@@ -60,8 +60,21 @@ function prettyLabel(field: string): string {
 }
 
 export function getAllFieldChanges(event: HistoryEvent): FieldChange[] {
-  const payload: any = event.details || event.payload
-  if (!payload || typeof payload !== 'object' || !payload.old || !payload.new) return []
+  // HistoryEvent has 'details' field, not 'payload'
+  const payload = event.details
+  // Type guard to ensure payload has the expected structure
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !('old' in payload) ||
+    !('new' in payload) ||
+    typeof payload.old !== 'object' ||
+    typeof payload.new !== 'object' ||
+    !payload.old ||
+    !payload.new
+  ) {
+    return []
+  }
 
   const oldRow = payload.old as Record<string, unknown>
   const newRow = payload.new as Record<string, unknown>

@@ -33,8 +33,27 @@ export interface AtRiskContainer {
 }
 
 /**
+ * Get projected demurrage rate for due-soon containers
+ * Uses first tier rate if tiers exist, otherwise falls back to flat rate
+ */
+function getProjectedDemurrageRate(container: ContainerRecordWithComputed): number {
+  const tiers = container.demurrage_tiers as
+    | { from_day: number; to_day: number | null; rate: number }[]
+    | null
+    | undefined
+
+  if (tiers && tiers.length > 0) {
+    const firstTier = tiers[0]
+    return typeof firstTier.rate === 'number' ? firstTier.rate : 0
+  }
+
+  return container.demurrage_fee_if_late ?? 0
+}
+
+/**
  * Calculate Cost of Inaction (7-day projection)
  * Only includes open containers that are overdue or due within 7 days
+ * Uses the same fee engine as the rest of the app (demurrage_fees for overdue, tiered rates for projections)
  */
 export function calculateCostOfInaction(
   containers: ContainerRecordWithComputed[]
@@ -49,28 +68,38 @@ export function calculateCostOfInaction(
 
     const daysLeft = container.days_left
 
-    // Count for badges
-    if (daysLeft !== null && daysLeft !== undefined && typeof daysLeft === 'number') {
-      if (daysLeft <= 0) {
+    // Skip if days_left is null/undefined or not a number
+    if (typeof daysLeft !== 'number') return
+
+    // Overdue containers (days_left < 0)
+    if (daysLeft < 0) {
         overdueCount++
-      } else if (daysLeft > 0 && daysLeft <= 7) {
-        dueSoonCount++
-      }
 
-      // Calculate fees for containers at risk (overdue or due within 7 days)
-      if (daysLeft <= 7) {
-        const demurrageFeeRate = container.demurrage_fee_if_late || 0
-
-        if (daysLeft < 0) {
-          // Overdue containers - multiply fee rate by days overdue
+      // Use precomputed demurrage_fees (already calculated with tiered logic)
+      if (typeof container.demurrage_fees === 'number') {
+        totalCost += container.demurrage_fees
+      } else {
+        // Fallback to flat rate calculation if demurrage_fees is not available
+        const rate = container.demurrage_fee_if_late ?? 0
           const daysOverdue = Math.abs(daysLeft)
-          totalCost += daysOverdue * demurrageFeeRate
-        } else {
-          // Containers due soon - use fee rate as potential exposure
-          totalCost += demurrageFeeRate
-        }
+        totalCost += daysOverdue * rate
       }
+
+      return
     }
+
+    // Due soon (0 < days_left <= 7)
+    if (daysLeft > 0 && daysLeft <= 7) {
+      dueSoonCount++
+
+      // Add one day of "projected" demurrage based on tiers
+      const projectedRate = getProjectedDemurrageRate(container)
+      totalCost += projectedRate
+
+      return
+    }
+
+    // For days_left > 7: do not count as overdue or due soon, do not add to totalCost
   })
 
   return {

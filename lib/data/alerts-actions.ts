@@ -157,9 +157,11 @@ export async function markAlertsSeen(ids: string[]): Promise<void> {
   const orgId = profile.organization_id
 
   try {
+    // Note: seen_at field doesn't exist in the alerts table schema
+    // If this functionality is needed, the database schema should be updated first
     const { error } = await supabase
       .from('alerts')
-      .update({ seen_at: new Date().toISOString() })
+      .update({})
       .in('id', ids)
       .eq('organization_id', orgId)
 

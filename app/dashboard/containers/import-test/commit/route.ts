@@ -24,24 +24,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    const parsed = await parseFile(file as Blob, (file as any)?.name);
+    const fileName = file instanceof File ? file.name : undefined;
+    const parsed = await parseFile(file as Blob, fileName);
     const headers = parsed.headers ?? Object.keys(parsed.rows[0] || {});
-    const mapping = mappingJson ? JSON.parse(String(mappingJson)) : autoSuggestMapping(headers);
+    const mapping = mappingJson 
+      ? (JSON.parse(String(mappingJson)) as Record<string, string>)
+      : autoSuggestMapping(headers);
 
-    const displayRows = (parsed as any).displayRows || parsed.rows;
+    const displayRows = parsed.displayRows || parsed.rows;
 
     // Apply mapping + type locks to ALL rows (cap to 5000 for safety)
     const limit = Math.min((parsed.rows || []).length, 5000);
-    const mapped = [];
+    const mapped: Record<string, unknown>[] = [];
     for (let i = 0; i < limit; i++) {
       const rawRow = parsed.rows[i] || {};
       const dispRow = displayRows[i] || rawRow;
-      const out: Record<string, any> = {};
+      const out: Record<string, unknown> = {};
       for (const [sourceHeader, targetKey] of Object.entries(mapping)) {
         const field = IMPORT_FIELD_MAP.get(targetKey);
         if (!field) continue;
-        const rawVal = rawRow?.[sourceHeader] ?? null;
-        const dispVal = dispRow?.[sourceHeader] ?? rawVal;
+        const rawVal = rawRow[sourceHeader] ?? null;
+        const dispVal = dispRow ? (dispRow[sourceHeader] ?? null) : rawVal;
         const chosen = field.type === 'string' ? dispVal : rawVal;
         out[targetKey] = coerceByType(chosen, field.type);
       }
@@ -72,12 +75,13 @@ export async function POST(req: Request) {
       counts,
       commit,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[import-commit] Unexpected error:', err);
+    const errorDetails = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
       { 
         error: 'Unexpected server error', 
-        details: err instanceof Error ? err.message : String(err) 
+        details: errorDetails
       },
       { status: 500 }
     );

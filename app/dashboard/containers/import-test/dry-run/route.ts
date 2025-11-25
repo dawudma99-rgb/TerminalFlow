@@ -22,24 +22,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    const parsed = await parseFile(file as Blob, (file as any)?.name);
+    const fileName = file instanceof File ? file.name : undefined;
+    const parsed = await parseFile(file as Blob, fileName);
     const headers = parsed.headers ?? Object.keys(parsed.rows[0] || {});
-    const mapping = mappingJson ? JSON.parse(String(mappingJson)) : autoSuggestMapping(headers);
+    const mapping = mappingJson 
+      ? (JSON.parse(String(mappingJson)) as Record<string, string>)
+      : autoSuggestMapping(headers);
 
-    const displayRows = (parsed as any).displayRows || parsed.rows;
+    const displayRows = parsed.displayRows || parsed.rows;
 
     // Apply mapping + type locks to ALL rows (cap to 5000 for UI perf)
     const limit = Math.min((parsed.rows || []).length, 5000);
-    const mapped = [];
+    const mapped: Record<string, unknown>[] = [];
     for (let i = 0; i < limit; i++) {
       const rawRow = parsed.rows[i] || {};
       const dispRow = displayRows[i] || rawRow;
-      const out: Record<string, any> = {};
+      const out: Record<string, unknown> = {};
       for (const [sourceHeader, targetKey] of Object.entries(mapping)) {
         const field = IMPORT_FIELD_MAP.get(targetKey);
         if (!field) continue;
-        const rawVal = rawRow?.[sourceHeader] ?? null;
-        const dispVal = dispRow?.[sourceHeader] ?? rawVal;
+        const rawVal = rawRow[sourceHeader] ?? null;
+        const dispVal = dispRow ? (dispRow[sourceHeader] ?? null) : rawVal;
         const chosen = field.type === 'string' ? dispVal : rawVal;
         out[targetKey] = coerceByType(chosen, field.type);
       }
@@ -53,8 +56,10 @@ export async function POST(req: Request) {
       sample: results.slice(0, 20),
       hasErrors: counts.error > 0,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Dry-run failed', stack: err?.stack || null }, { status: 500 });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Dry-run failed';
+    const errorStack = err instanceof Error ? err.stack : null;
+    return NextResponse.json({ error: errorMessage, stack: errorStack }, { status: 500 });
   }
 }
 

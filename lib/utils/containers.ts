@@ -35,6 +35,10 @@ export interface ContainerRecord {
   created_at?: ContainerRow['created_at'] | null
   updated_at?: ContainerRow['updated_at'] | null
   version?: ContainerRow['version'] | null
+  // pol and pod are used in the codebase but may not exist in the database schema yet
+  pol?: string | null
+  pod?: string | null
+  lfd_date?: ContainerRow['lfd_date'] | null
 }
 
 export interface ContainerWithDerivedFields extends ContainerRecord {
@@ -42,6 +46,7 @@ export interface ContainerWithDerivedFields extends ContainerRecord {
   status: ContainerStatus
   demurrage_fees: number
   detention_fees: number
+  // lfd_date is inherited from ContainerRecord, but we override it here to ensure it's computed
   lfd_date: string | null
   detention_chargeable_days: number | null
   detention_status: 'Safe' | 'Warning' | 'Overdue' | null

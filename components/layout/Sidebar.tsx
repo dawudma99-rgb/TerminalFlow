@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useMemo } from 'react'
 
-import { APP_NAV_ITEMS, getActiveNavItem } from '@/lib/constants/nav'
+import { APP_NAV_ITEMS, getActiveNavItem, type AppNavItem } from '@/lib/constants/nav'
 import { isActiveRoute, normalizePath } from '@/lib/utils/navigation'
 import { cn } from '@/lib/utils'
 import { PortflowLogo } from '@/components/ui/PortflowLogo'
@@ -29,7 +29,8 @@ export function Sidebar() {
           const isActive =
             isActiveRoute(normalizedPathname, normalizedHref) ||
             activeItem?.href === normalizedHref
-          const Icon = item.icon
+          const navItem = item as AppNavItem
+          const Icon = navItem.icon
 
           return (
             <div key={item.href} className="px-3">
@@ -46,9 +47,9 @@ export function Sidebar() {
                 {item.label}
               </Link>
 
-              {item.children?.length ? (
+              {navItem.children?.length ? (
                 <div className="mt-1 space-y-1 pl-9">
-                  {item.children.map((child) => {
+                  {navItem.children.map((child: AppNavItem) => {
                     const normalizedChildHref = normalizePath(child.href)
                     const childActive =
                       isActiveRoute(normalizedPathname, normalizedChildHref) ||

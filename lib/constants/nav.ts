@@ -5,8 +5,6 @@
  */
 
 import type { ComponentType } from 'react'
-import { Clock } from 'lucide-react'
-
 import { isActiveRoute, normalizePath } from '../utils/navigation'
 
 /**
@@ -23,7 +21,7 @@ export interface AppNavItem {
   /** Optional icon component rendered alongside the label. */
   icon?: ComponentType<{ className?: string }>
   /** High-level grouping displayed in analytics and telemetry dashboards. */
-  section?: 'dashboard' | 'containers' | 'analytics' | 'settings'
+  section?: 'dashboard' | 'containers' | 'analytics' | 'client-updates' | 'settings'
   /** Nested navigation entries scoped beneath this item. */
   children?: AppNavItem[]
 }
@@ -56,6 +54,11 @@ export const APP_NAV_ITEMS = [
     section: 'analytics',
   },
   {
+    label: 'Client Updates',
+    href: '/dashboard/client-updates',
+    section: 'client-updates',
+  },
+  {
     label: 'Settings',
     href: '/dashboard/settings',
     section: 'settings',
@@ -76,9 +79,10 @@ function collectNavItems(
   collector: AppNavItem[] = []
 ): AppNavItem[] {
   for (const item of items) {
-    collector.push(item)
-    if (item.children?.length) {
-      collectNavItems(item.children, collector)
+    collector.push(item as AppNavItem)
+    const navItem = item as AppNavItem
+    if (navItem.children?.length) {
+      collectNavItems(navItem.children as ReadonlyArray<ReadonlyNavItem>, collector)
     }
   }
   return collector

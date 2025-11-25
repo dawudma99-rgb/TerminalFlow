@@ -15,7 +15,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { ChevronDown, ChevronRight, AlertCircle, AlertTriangle, CheckCircle, Loader2, Upload, FileSpreadsheet, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, AlertCircle, AlertTriangle, CheckCircle, Loader2, FileSpreadsheet, X } from 'lucide-react';
 import {
   Table,
   TableHeader,
@@ -29,6 +29,64 @@ import { Card, CardContent } from '@/components/ui/card';
 
 type SuggestedMap = Record<string, string>;
 
+// Types for API responses
+type ParsedResponse = {
+  headers?: string[];
+  stats?: {
+    totalRows: number;
+    nonEmptyRows: number;
+    fileType: 'csv' | 'xlsx';
+  };
+};
+
+type PreviewResponse = {
+  headers?: string[];
+  suggestedMapping?: SuggestedMap;
+  previewRows?: Record<string, unknown>[];
+  stats?: {
+    totalRows: number;
+    nonEmptyRows: number;
+    fileType: 'csv' | 'xlsx';
+  };
+  requiredMissing?: string[];
+};
+
+type DryRunResponse = {
+  counts?: {
+    total: number;
+    ok: number;
+    warn: number;
+    error: number;
+    duplicates: number;
+  };
+  sample?: Array<{
+    index: number;
+    ok: boolean;
+    warnings: string[];
+    errors: string[];
+    normalized: Record<string, unknown>;
+  }>;
+  hasErrors?: boolean;
+};
+
+type CommitResponse = {
+  counts?: {
+    total: number;
+    ok: number;
+    warn: number;
+    error: number;
+    duplicates: number;
+  };
+  commit?: {
+    inserted: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ index: number; message: string }>;
+  };
+  blocked?: boolean;
+  message?: string;
+};
+
 interface ImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,12 +95,12 @@ interface ImportDialogProps {
 
 export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<any>(null);
+  const [parsed, setParsed] = useState<ParsedResponse | null>(null);
   const [mapping, setMapping] = useState<SuggestedMap | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [preview, setPreview] = useState<any>(null);
-  const [dryRun, setDryRun] = useState<any>(null);
-  const [commitResult, setCommitResult] = useState<any>(null);
+  const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [dryRun, setDryRun] = useState<DryRunResponse | null>(null);
+  const [commitResult, setCommitResult] = useState<CommitResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -91,7 +149,7 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
 
   // Scroll to validation results when errors appear
   useEffect(() => {
-    if (hasValidated && dryRun?.counts?.error > 0 && validationRef.current) {
+    if (hasValidated && dryRun?.counts && (dryRun.counts.error ?? 0) > 0 && validationRef.current) {
       setTimeout(() => {
         validationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
@@ -132,8 +190,9 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
       if (!res2.ok) throw new Error(data2?.error || 'Preview failed');
       setMapping(data2?.suggestedMapping || {});
       setPreview(data2);
-    } catch (err: any) {
-      setError(err.message || 'Error');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error';
+      setError(errorMessage);
       logger.error('[import-dialog] Parse error:', err);
       // Reset file state on error so user can try again
       setFile(null);
@@ -156,8 +215,9 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Preview failed');
       setPreview(data);
-    } catch (err: any) {
-      setError(err.message || 'Error');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error';
+      setError(errorMessage);
       logger.error('[import-dialog] Preview error:', err);
     } finally {
       setBusy(false);
@@ -253,9 +313,10 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
         toast.error(commitData?.message || 'Import blocked due to validation errors', { id: loadingToast });
         setBusy(false);
       }
-    } catch (e: any) {
-      toast.error(e.message || 'Import failed', { id: loadingToast });
-      setError(e.message || 'Import failed');
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Import failed';
+      toast.error(errorMessage, { id: loadingToast });
+      setError(errorMessage);
       logger.error('[import-dialog] Import error:', e);
       setBusy(false);
     }
@@ -284,8 +345,8 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
   };
 
   const nonEmptyRows = parsed?.stats?.nonEmptyRows || 0;
-  const hasErrors = dryRun?.counts?.error > 0;
-  const hasWarnings = dryRun?.counts?.warn > 0 && !hasErrors;
+  const hasErrors = (dryRun?.counts?.error ?? 0) > 0;
+  const hasWarnings = (dryRun?.counts?.warn ?? 0) > 0 && !hasErrors;
   const buttonDisabled = busy || !parsed || !mapping || hasErrors;
   const buttonText = busy 
     ? 'Validating & Importing...' 
@@ -296,11 +357,12 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
   // Determine banner state
   const getBannerState = () => {
     // Error state: validation has errors and commit was not executed
-    if (hasValidated && hasErrors && !commitResult?.commit) {
+    if (hasValidated && hasErrors && !commitResult?.commit && dryRun?.counts) {
+      const errorCount = dryRun.counts.error ?? 0;
       return {
         type: 'error' as const,
         title: 'Import blocked',
-        body: `${dryRun.counts.error} row${dryRun.counts.error !== 1 ? 's have' : ' has'} errors. Nothing was imported. Download the error report, fix the file, and try again.`,
+        body: `${errorCount} row${errorCount !== 1 ? 's have' : ' has'} errors. Nothing was imported. Download the error report, fix the file, and try again.`,
         hasDownloadButton: true,
       };
     }
@@ -324,9 +386,9 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
     }
 
     // Warning state: commit succeeded but there were warnings (no errors)
-    if (commitResult?.commit && !commitResult.blocked && !hasErrors && dryRun?.counts?.warn > 0) {
+    if (commitResult?.commit && !commitResult.blocked && !hasErrors && dryRun?.counts && (dryRun.counts.warn ?? 0) > 0) {
       const inserted = commitResult.commit.inserted || 0;
-      const warningCount = dryRun.counts.warn || 0;
+      const warningCount = dryRun.counts.warn ?? 0;
       return {
         type: 'warning' as const,
         title: 'Imported with warnings',
@@ -362,10 +424,16 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
     e.stopPropagation();
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile && (droppedFile.name.endsWith('.csv') || droppedFile.name.endsWith('.xlsx'))) {
-      const syntheticEvent = {
-        target: { files: [droppedFile] },
-      } as React.ChangeEvent<HTMLInputElement>;
-      handleFileChange(syntheticEvent);
+      // Create a proper ChangeEvent for the file input
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(droppedFile);
+      if (fileInputRef.current) {
+        fileInputRef.current.files = dataTransfer.files;
+        const syntheticEvent = {
+          target: fileInputRef.current,
+        } as React.ChangeEvent<HTMLInputElement>;
+        handleFileChange(syntheticEvent);
+      }
     }
   };
 
@@ -391,7 +459,7 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                   <div className="text-center space-y-2">
                     <h3 className="text-base font-semibold text-foreground">Import Containers</h3>
                     <p className="text-sm text-muted-foreground">
-                      Drop a file from your forwarding spreadsheet. We'll auto-detect columns and highlight any issues.
+                      Drop a file from your forwarding spreadsheet. We&apos;ll auto-detect columns and highlight any issues.
                     </p>
                   </div>
 
@@ -591,7 +659,10 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                         {bannerState.hasDownloadButton && hasValidated && dryRun && (
                           <Button
                             type="button"
-                            onClick={() => downloadCsv(`import-errors-${Date.now()}.csv`, buildErrorsCsv(dryRun.sample))}
+                            onClick={() => {
+                              if (!dryRun.sample) return;
+                              downloadCsv(`import-errors-${Date.now()}.csv`, buildErrorsCsv(dryRun.sample));
+                            }}
                             disabled={busy}
                             variant="outline"
                             size="sm"
@@ -672,7 +743,7 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                       ))}
                     </div>
                     
-                    {preview?.requiredMissing?.length > 0 && (
+                    {preview?.requiredMissing && preview.requiredMissing.length > 0 && (
                       <p className="text-amber-600 text-xs mt-3">
                         Missing required fields in mapping: {preview.requiredMissing.join(', ')}
                       </p>
@@ -702,18 +773,31 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {preview.previewRows.slice(0, 10).map((row: any, index: number) => {
+                          {preview.previewRows?.slice(0, 10).map((row, index: number) => {
                             // Get status (use milestone if status not available)
-                            const status = row.status || row.milestone || null;
+                            const status = (typeof row.status === 'string' ? row.status : null) || 
+                                         (typeof row.milestone === 'string' ? row.milestone : null);
 
                             return (
                               <TableRow key={index}>
-                                <TableCell className="text-xs font-mono">{row.container_no || '—'}</TableCell>
-                                <TableCell className="text-xs">{row.bl_number || '—'}</TableCell>
-                                <TableCell className="text-xs">{row.pol || '—'}</TableCell>
-                                <TableCell className="text-xs">{row.pod || '—'}</TableCell>
-                                <TableCell className="text-xs">{formatPreviewDate(row.arrival_date)}</TableCell>
-                                <TableCell className="text-xs">{row.free_days ?? '—'}</TableCell>
+                                <TableCell className="text-xs font-mono">
+                                  {typeof row.container_no === 'string' ? row.container_no : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {typeof row.bl_number === 'string' ? row.bl_number : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {typeof row.pol === 'string' ? row.pol : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {typeof row.pod === 'string' ? row.pod : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {formatPreviewDate(typeof row.arrival_date === 'string' ? row.arrival_date : null)}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {typeof row.free_days === 'number' ? row.free_days : '—'}
+                                </TableCell>
                                 <TableCell className="text-xs">
                                   {status ? (
                                     <Badge variant="outline" className="text-xs">
@@ -723,8 +807,12 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                                     '—'
                                   )}
                                 </TableCell>
-                                <TableCell className="text-xs">{row.carrier || '—'}</TableCell>
-                                <TableCell className="text-xs">{row.assigned_to || '—'}</TableCell>
+                                <TableCell className="text-xs">
+                                  {typeof row.carrier === 'string' ? row.carrier : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {typeof row.assigned_to === 'string' ? row.assigned_to : '—'}
+                                </TableCell>
                               </TableRow>
                             );
                           })}
@@ -769,22 +857,26 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
               {hasValidated && dryRun && (
                 <div ref={validationRef} className="space-y-2 rounded-md border p-4">
                   <h3 className="font-medium text-sm">Validation Results</h3>
-                  <p className="text-xs">
-                    <strong>Totals:</strong> OK {dryRun.counts.ok} • Warn {dryRun.counts.warn} • Error {dryRun.counts.error} • Duplicates {dryRun.counts.duplicates} • Total {dryRun.counts.total}
-                  </p>
-                  {dryRun.counts.error > 0 && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <Button
-                        type="button"
-                        onClick={() => downloadCsv(`import-errors-${Date.now()}.csv`, buildErrorsCsv(dryRun.sample))}
-                        disabled={busy}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 border-red-300"
-                      >
-                        Download errors.csv
-                      </Button>
-                    </div>
+                  {dryRun.counts && (
+                    <>
+                      <p className="text-xs">
+                        <strong>Totals:</strong> OK {dryRun.counts.ok ?? 0} • Warn {dryRun.counts.warn ?? 0} • Error {dryRun.counts.error ?? 0} • Duplicates {dryRun.counts.duplicates ?? 0} • Total {dryRun.counts.total ?? 0}
+                      </p>
+                      {(dryRun.counts.error ?? 0) > 0 && dryRun.sample && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <Button
+                            type="button"
+                            onClick={() => downloadCsv(`import-errors-${Date.now()}.csv`, buildErrorsCsv(dryRun.sample!))}
+                            disabled={busy}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-300"
+                          >
+                            Download errors.csv
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className="max-h-48 overflow-auto mt-2">
                     <table className="w-full text-xs border">
@@ -797,14 +889,16 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                         </tr>
                       </thead>
                       <tbody>
-                        {dryRun.sample.map((r: any) => {
-                          const status = !r.ok ? 'ERROR' : (r.warnings?.length ? 'WARN' : 'OK');
-                          const msg = (!r.ok ? r.errors?.[0] : r.warnings?.[0]) || '';
+                        {dryRun.sample?.map((r) => {
+                          const status = !r.ok ? 'ERROR' : ((r.warnings?.length ?? 0) > 0 ? 'WARN' : 'OK');
+                          const msg = (!r.ok ? (r.errors?.[0] ?? '') : (r.warnings?.[0] ?? '')) || '';
                           return (
                             <tr key={r.index} className={`border-t ${!r.ok ? 'bg-red-50 dark:bg-red-950/20' : ''}`}>
                               <td className="p-2">{r.index + 1}</td>
                               <td className="p-2">{status}</td>
-                              <td className="p-2">{r.normalized?.container_no || '—'}</td>
+                              <td className="p-2">
+                                {typeof r.normalized?.container_no === 'string' ? r.normalized.container_no : '—'}
+                              </td>
                               <td className="p-2">{msg}</td>
                             </tr>
                           );
@@ -836,7 +930,7 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                             Commit Errors ({commitResult.commit.errors.length}):
                           </p>
                           <ul className="text-xs space-y-1 mb-2 max-h-32 overflow-y-auto">
-                            {commitResult.commit.errors.slice(0, 10).map((e: any, i: number) => (
+                            {commitResult.commit.errors.slice(0, 10).map((e, i: number) => (
                               <li key={i}>
                                 Row {e.index + 1}: {e.message}
                               </li>
@@ -850,8 +944,9 @@ export function ImportDialog({ open, onOpenChange, onSuccess }: ImportDialogProp
                           <Button
                             type="button"
                             onClick={() => {
+                              if (!commitResult.commit) return;
                               const csv = buildErrorsCsv(
-                                commitResult.commit.errors.map((e: any) => ({
+                                commitResult.commit.errors.map((e) => ({
                                   index: e.index,
                                   ok: false,
                                   errors: [e.message],

@@ -7,6 +7,7 @@
  * - `Gate Out`
  * - `Returned Empty`
  * - `Closed`
+ * - `Delayed`
  *
  * Use this constant to render dropdown options so the UI always stays in sync
  * with the database constraint.
@@ -25,6 +26,7 @@ const RAW_MILESTONES = [
   'Gate Out',
   'Returned Empty',
   'Closed',
+  'Delayed',
 ] as const
 
 export const CONTAINER_MILESTONES = RAW_MILESTONES
@@ -62,6 +64,11 @@ const LEGACY_KEYS = {
   'in demurrage': 'In Demurrage',
   demurrage: 'In Demurrage',
   closed: 'Closed',
+  delayed: 'Delayed',
+  'on hold': 'Delayed',
+  hold: 'Delayed',
+  'on-hold': 'Delayed',
+  'held': 'Delayed',
 } as const satisfies Record<string, ContainerMilestone>
 
 /**

@@ -1,4 +1,4 @@
-import { IMPORT_FIELDS, IMPORT_FIELD_MAP, ImportField, ImportType } from './fields';
+import { IMPORT_FIELDS, ImportType } from './fields';
 
 type Synonyms = Record<string, string[]>;
 
@@ -65,7 +65,7 @@ function excelSerialToISO(n: number, keepTime: boolean): string | null {
 }
 
 // Coercion guards (never treat text fields like dates!)
-export function coerceByType(value: any, t: ImportType): any {
+export function coerceByType(value: unknown, t: ImportType): string | number | boolean | null {
   if (value === undefined || value === null) return null;
   
   // For string type: never parse as date/number
@@ -130,7 +130,12 @@ export function coerceByType(value: any, t: ImportType): any {
     return value.toISOString();
   }
 
-  return value;
+  // Fallback: convert unknown types to string
+  if (typeof value === 'object' && value !== null) {
+    return JSON.stringify(value);
+  }
+  
+  return String(value);
 }
 
 // Accept multiple date styles; when datetime=false, truncate to YYYY-MM-DD
@@ -147,9 +152,10 @@ function tryParseDateToISO(input: string, keepTime: boolean): string | null {
   // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY [optional time & AM/PM]
   let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*(AM|PM)?)?$/i);
   if (m) {
-    let [, dd, mm, yy, time, ap] = m;
-    if (yy.length === 2) yy = String(2000 + Number(yy));
-    const composed = `${yy}-${pad(mm)}-${pad(dd)}${time ? ` ${time}${ap ? ' ' + ap : ''}` : ''}`;
+    const [, dd, mm, yy, time, ap] = m;
+    let year = yy;
+    if (year.length === 2) year = String(2000 + Number(year));
+    const composed = `${year}-${pad(mm)}-${pad(dd)}${time ? ` ${time}${ap ? ' ' + ap : ''}` : ''}`;
     const d = new Date(composed);
     return keepTime ? d.toISOString() : d.toISOString().slice(0, 10);
   }
@@ -157,9 +163,10 @@ function tryParseDateToISO(input: string, keepTime: boolean): string | null {
   // MM/DD/YYYY
   m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m) {
-    let [, mm, dd, yy] = m;
-    if (yy.length === 2) yy = String(2000 + Number(yy));
-    const d = new Date(`${yy}-${pad(mm)}-${pad(dd)}`);
+    const [, mm, dd, yy] = m;
+    let year = yy;
+    if (year.length === 2) year = String(2000 + Number(year));
+    const d = new Date(`${year}-${pad(mm)}-${pad(dd)}`);
     return keepTime ? d.toISOString() : d.toISOString().slice(0, 10);
   }
 

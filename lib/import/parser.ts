@@ -1,14 +1,30 @@
 import * as XLSX from 'xlsx';
+// @ts-expect-error - papaparse doesn't have type definitions
 import Papa from 'papaparse';
+
+// Type declaration for papaparse meta fields
+interface PapaParseMeta {
+  fields?: (string | undefined)[];
+  delimiter?: string;
+  linebreak?: string;
+  aborted?: boolean;
+  truncated?: boolean;
+  cursor?: number;
+}
+
+// Type for a parsed row - values can be string, number, boolean, null, or Date (as ISO string)
+export type ParsedRow = Record<string, string | number | boolean | null>;
 
 export type ParsedResult = {
   headers: string[];
-  rows: Record<string, any>[];
+  rows: ParsedRow[];
   stats: {
     totalRows: number;
     nonEmptyRows: number;
     fileType: 'csv' | 'xlsx';
   };
+  // Extended property for display rows (used internally)
+  displayRows?: ParsedRow[];
 };
 
 const TRUE_LIKE = new Set(['true', 'yes', 'y', '1']);
@@ -19,7 +35,6 @@ export async function parseFile(file: Blob, filename?: string): Promise<ParsedRe
   const buf = await file.arrayBuffer();
   const u8 = new Uint8Array(buf);
   const isXlsx = looksLikeXlsx(u8) || ext.endsWith('.xlsx');
-  const isCsv = !isXlsx; // default to CSV otherwise
 
   if (isXlsx) {
     return parseXlsx(buf);
@@ -48,51 +63,52 @@ function parseXlsx(ab: ArrayBuffer): ParsedResult {
     }
     
     // raw values for dates/numbers
-    const rowsRaw = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: null, raw: true });
+    const rowsRaw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null, raw: true });
     // display text exactly as Excel shows (for string fields like B/L)
-    const rowsDisplay = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: null, raw: false });
+    const rowsDisplay = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null, raw: false });
 
     const rows = rowsRaw.map(normalizeRow);
-    const headers = inferHeaders(rowsDisplay.length ? rowsDisplay : rows);
+    const displayRowsNormalized = rowsDisplay.map(normalizeRow);
+    const headers = inferHeaders(displayRowsNormalized.length ? displayRowsNormalized : rows);
     const nonEmptyRows = rows.filter(anyValuePresent).length;
 
     return {
       headers,
       rows,
       stats: { totalRows: rows.length, nonEmptyRows, fileType: 'xlsx' },
-      // @ts-expect-error - extend type to include displayRows
-      displayRows: rowsDisplay,
+      displayRows: displayRowsNormalized,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Re-throw with context
-    throw new Error(`XLSX parsing failed: ${err?.message || String(err)}`);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    throw new Error(`XLSX parsing failed: ${errorMessage}`);
   }
 }
 
 function parseCsv(text: string): ParsedResult {
-  const result = Papa.parse<Record<string, any>>(text, {
+  const result = Papa.parse<Record<string, unknown>>(text, {
     header: true,
     dynamicTyping: false,
     skipEmptyLines: 'greedy',
   });
-  const rawRows = (result.data || []) as Record<string, any>[];
+  const rawRows = (result.data || []) as Record<string, unknown>[];
   const rows = rawRows.map(normalizeRow);
-  const headers = result.meta.fields?.map((h) => h ?? '').filter(Boolean) ?? inferHeaders(rows);
+  const meta = result.meta as PapaParseMeta;
+  const headers = meta.fields?.map((h: string | undefined) => h ?? '').filter(Boolean) ?? inferHeaders(rows);
   const nonEmptyRows = rows.filter(anyValuePresent).length;
 
   return {
     headers,
     rows,
     stats: { totalRows: rows.length, nonEmptyRows, fileType: 'csv' },
-    // @ts-expect-error - extend type to include displayRows
     displayRows: rows, // CSV doesn't have raw/display distinction
   };
 }
 
 /* ---------- normalization ---------- */
 
-function normalizeRow(row: Record<string, any>): Record<string, any> {
-  const out: Record<string, any> = {};
+function normalizeRow(row: Record<string, unknown>): ParsedRow {
+  const out: ParsedRow = {};
   for (const [k, v] of Object.entries(row)) {
     const key = (k || '').toString().trim();
     out[key] = normalizeValue(v);
@@ -100,7 +116,7 @@ function normalizeRow(row: Record<string, any>): Record<string, any> {
   return out;
 }
 
-function normalizeValue(v: any): any {
+function normalizeValue(v: unknown): string | number | boolean | null {
   if (v === undefined || v === null) return null;
   if (typeof v === 'string') {
     const s = v.trim();
@@ -134,7 +150,14 @@ function normalizeValue(v: any): any {
   if (v instanceof Date && !Number.isNaN(v.valueOf())) {
     return v.toISOString();
   }
-  return v;
+  
+  // Fallback for other types - convert to string
+  if (typeof v === 'object' && v !== null) {
+    return JSON.stringify(v);
+  }
+  
+  // For other primitives, convert to string
+  return String(v);
 }
 
 function tryParseDateToISO(s: string): string | null {
@@ -149,8 +172,9 @@ function tryParseDateToISO(s: string): string | null {
     /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i
   );
   if (m1) {
-    let [, d, m, y, h, min, sec, ap] = m1;
-    if (y.length === 2) y = String(2000 + Number(y)); // 2-digit year → 20xx
+    const [, d, m, y, h, min, sec, ap] = m1;
+    let year = y;
+    if (year.length === 2) year = String(2000 + Number(year)); // 2-digit year → 20xx
     let hour = h ? Number(h) : 0;
     if (ap) {
       const isPM = ap.toUpperCase() === 'PM';
@@ -160,16 +184,17 @@ function tryParseDateToISO(s: string): string | null {
     const timeStr = h
       ? ` ${pad(hour)}:${pad(min)}${sec ? ':' + pad(sec) : ':00'}`
       : ' 00:00:00';
-    const dt = new Date(`${y}-${pad(m)}-${pad(d)}${timeStr}`);
+    const dt = new Date(`${year}-${pad(m)}-${pad(d)}${timeStr}`);
     return isNaN(dt.getTime()) ? null : dt.toISOString();
   }
 
   // MM/DD/YYYY variant
   const m2 = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m2) {
-    let [, mm, dd, yy] = m2;
-    if (yy.length === 2) yy = String(2000 + Number(yy));
-    const dt = new Date(`${yy}-${pad(mm)}-${pad(dd)} 00:00`);
+    const [, mm, dd, yy] = m2;
+    let year = yy;
+    if (year.length === 2) year = String(2000 + Number(year));
+    const dt = new Date(`${year}-${pad(mm)}-${pad(dd)} 00:00`);
     return isNaN(dt.getTime()) ? null : dt.toISOString();
   }
 
@@ -180,13 +205,13 @@ function pad(n: string | number): string {
   return String(n).padStart(2, '0');
 }
 
-function anyValuePresent(row: Record<string, any>): boolean {
+function anyValuePresent(row: ParsedRow): boolean {
   return Object.values(row).some(
     (v) => !(v === null || v === '' || (typeof v === 'string' && v.trim() === ''))
   );
 }
 
-function inferHeaders(rows: Record<string, any>[]): string[] {
+function inferHeaders(rows: ParsedRow[]): string[] {
   const first = rows[0] || {};
   return Object.keys(first);
 }

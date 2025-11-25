@@ -13,7 +13,8 @@ type AttentionCardProps = {
  */
 function formatContainerDescription(container: Pick<ContainerRecordWithComputed, "status" | "days_left" | "port">): string {
   const status = container.status
-  const daysLeft = container.days_left
+  // Ensure daysLeft is a number or null (handle undefined)
+  const daysLeft: number | null = container.days_left ?? null
   const port = container.port || 'the port'
 
   if (status === 'Overdue' && daysLeft !== null && daysLeft < 0) {

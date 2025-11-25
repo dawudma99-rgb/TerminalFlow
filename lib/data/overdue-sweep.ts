@@ -5,8 +5,7 @@ import type { Database } from '@/types/database'
 import { computeDerivedFields } from '@/lib/utils/containers'
 import type { ContainerRecord } from '@/lib/utils/containers'
 import { logger } from '@/lib/utils/logger'
-
-type ContainerRow = Database['public']['Tables']['containers']['Row']
+import { createEmailDraftForContainerEvent } from '@/lib/data/email-drafts-actions'
 
 /**
  * Helper to get the current user's organization ID.
@@ -94,7 +93,6 @@ export async function getOverdueCandidatesForCurrentOrg(): Promise<OverdueCandid
 
   for (const container of containers) {
     // Compute derived fields (status, days_left, etc.)
-    // ContainerRow is compatible with ContainerRecord - cast for type safety
     const derived = computeDerivedFields(container as ContainerRecord)
 
     // Only include containers that are currently overdue
@@ -244,6 +242,20 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
       skippedExisting++
     } else {
       createdAlerts++
+      // Create email draft using the same supabase client and orgId we already have
+      // Fire-and-forget but catch errors for logging
+      createEmailDraftForContainerEvent({
+        containerId: candidate.id,
+        eventType: 'became_overdue',
+        organizationId: orgId,
+        supabase,
+      }).catch((err) => {
+        logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to create email draft', {
+          container_id: candidate.id,
+          container_no: candidate.container_no,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
       if (process.env.NODE_ENV === 'development') {
         logger.debug('[backfillOverdueAlertsForCurrentOrg] Created alert', {
           container_id: candidate.id,
@@ -432,6 +444,20 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
       skippedExisting++
     } else {
       createdAlerts++
+      // Create email draft using the same supabase client and orgId we already have
+      // Fire-and-forget but catch errors for logging
+      createEmailDraftForContainerEvent({
+        containerId: candidate.id,
+        eventType: 'lfd_warning',
+        organizationId: orgId,
+        supabase,
+      }).catch((err) => {
+        logger.error('[backfillWarningAlertsForCurrentOrg] Failed to create email draft', {
+          container_id: candidate.id,
+          container_no: candidate.container_no,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
       if (process.env.NODE_ENV === 'development') {
         logger.debug('[backfillWarningAlertsForCurrentOrg] Created alert', {
           container_id: candidate.id,

@@ -7,6 +7,7 @@ import { useListsContext } from '@/components/providers/ListsProvider'
 import { ListTabs } from '@/components/lists/ListTabs'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { LoadingState } from '@/components/ui/LoadingState'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import type { ContainerUpdate } from '@/lib/data/containers-actions'
@@ -119,6 +120,8 @@ function EditContainerDialog({
       const updatedData: ContainerUpdate & {
         bl_number?: string | null
         milestone?: ContainerMilestone
+        pol?: string | null
+        pod?: string | null
       } = {
         container_no: formData.container_no.trim(),
         pol: normalizeOptionalString(formData.pol),
@@ -366,7 +369,6 @@ export default function ContainersPage() {
   const [editingContainer, setEditingContainer] = useState<ContainerRecordWithComputed | null>(null)
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now())
   const [timeAgo, setTimeAgo] = useState<string>('Just now')
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   
@@ -423,21 +425,6 @@ export default function ContainersPage() {
     }
   }, [containers, visibleCount, loading])
 
-  // Handle manual refresh
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    try {
-      await reload()
-      setLastUpdated(Date.now())
-      setTimeAgo('Just now')
-      toast.success('Containers refreshed successfully')
-    } catch (err) {
-      logger.error('Error refreshing containers:', err)
-      toast.error('Failed to refresh containers. Please try again.')
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
 
   const handleDeleteContainer = async (container: ContainerRecordWithComputed) => {
     try {
@@ -549,19 +536,28 @@ export default function ContainersPage() {
       const url = `/dashboard/containers/export?status=${encodeURIComponent(statusForExport)}`
       const filename = await downloadFromUrl(url)
       toast.success(`Exported ${filename}`, { id: t })
-    } catch (err: any) {
-      toast.error(err?.message || 'Export failed')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Export failed'
+      toast.error(errorMessage)
     } finally {
       setExporting(false)
     }
   }
 
   // Compute stats from filtered containers (single-pass optimization)
-  const stats = useMemo(() => {
+  const stats = useMemo((): {
+    total: number
+    open: number
+    closed: number
+    overdue: number
+    safe: number
+    warning: number
+  } => {
     let open = 0
     let closed = 0
     let overdue = 0
     let safe = 0
+    let warning = 0
 
     for (const c of filteredContainers) {
       if (c.is_closed) closed++
@@ -569,6 +565,7 @@ export default function ContainersPage() {
 
       if (c.status === 'Overdue') overdue++
       else if (c.status === 'Safe') safe++
+      else if (c.status === 'Warning') warning++
     }
 
     return {
@@ -577,6 +574,7 @@ export default function ContainersPage() {
       closed,
       overdue,
       safe,
+      warning,
     }
   }, [filteredContainers])
   

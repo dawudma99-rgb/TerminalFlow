@@ -24,21 +24,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'File too large (max 25MB)' }, { status: 413 });
     }
 
-    const parsed = await parseFile(file as Blob, (file as any)?.name);
+    const fileName = file instanceof File ? file.name : undefined;
+    const parsed = await parseFile(file as Blob, fileName);
     const headers = parsed.headers ?? Object.keys(parsed.rows[0] || {});
     const suggested = mappingJson
-      ? JSON.parse(String(mappingJson) || '{}')
+      ? JSON.parse(String(mappingJson) || '{}') as Record<string, string>
       : autoSuggestMapping(headers);
 
     // Build normalized preview using mapping and target type locks.
-    const displayRows = (parsed as any).displayRows || parsed.rows;
+    const displayRows = parsed.displayRows || parsed.rows;
     const previewRows = (parsed.rows || []).slice(0, 10).map((row, idx) => {
-      const show: Record<string, any> = {};
+      const show: Record<string, unknown> = {};
       for (const [sourceHeader, targetKey] of Object.entries(suggested)) {
         const field = IMPORT_FIELD_MAP.get(targetKey);
         if (!field) continue;
-        const rawVal = row?.[sourceHeader] ?? null;
-        const dispVal = displayRows?.[idx]?.[sourceHeader] ?? rawVal;
+        const rawVal = row[sourceHeader] ?? null;
+        const dispRow = displayRows[idx];
+        const dispVal = dispRow ? (dispRow[sourceHeader] ?? null) : rawVal;
         // If the target type is string, use the display cell text; otherwise use raw.
         const chosen = field.type === 'string' ? dispVal : rawVal;
         show[targetKey] = coerceByType(chosen, field.type);
@@ -59,9 +61,11 @@ export async function POST(req: Request) {
       stats: parsed.stats,
       requiredMissing: missingRequiredTargets,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Preview failed';
+    const errorStack = err instanceof Error ? err.stack : null;
     return NextResponse.json(
-      { error: err?.message || 'Preview failed', stack: err?.stack || null },
+      { error: errorMessage, stack: errorStack },
       { status: 500 }
     );
   }

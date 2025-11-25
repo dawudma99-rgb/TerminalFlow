@@ -6,40 +6,44 @@ const toDateOnly = (v?: string | null) => (v ? String(v).slice(0,10) : null);
 
 const ContainerNoRegex = /^[A-Za-z]{4}\d{7}$/; // relaxed: four letters + 7 digits
 
+// Type for normalized row data
+type NormalizedRow = Record<string, string | number | null>;
+
 export type RowValidation = {
   ok: boolean;
   warnings: string[];
   errors: string[];
-  normalized: Record<string, any>;
+  normalized: NormalizedRow;
 };
 
-export function validateRow(input: Record<string, any>): RowValidation {
+export function validateRow(input: Record<string, unknown>): RowValidation {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  const norm: Record<string, any> = {};
+  const norm: NormalizedRow = {};
 
   // Required: container_no
-  let container_no = (input.container_no ?? '').toString().trim().toUpperCase();
+  const container_no = (input.container_no ?? '').toString().trim().toUpperCase();
   if (!container_no) errors.push('Missing container number');
   else if (!ContainerNoRegex.test(container_no)) warnings.push('Container number looks unusual (expected 4 letters + 7 digits)');
   norm.container_no = container_no || null;
 
   // Required: arrival_date (date-only)
-  let arrival_date = input.arrival_date ?? null;
+  let arrival_date: string | null = input.arrival_date ? String(input.arrival_date) : null;
   if (!arrival_date) errors.push('Missing arrival date');
   else {
     try {
-      ISO_DATE.parse(String(arrival_date));
-      arrival_date = toDateOnly(String(arrival_date));
+      ISO_DATE.parse(arrival_date);
+      arrival_date = toDateOnly(arrival_date);
     } catch {
       errors.push('Arrival date is not a valid date');
+      arrival_date = null;
     }
   }
   norm.arrival_date = arrival_date;
 
   // Optional text
-  const str = (v: any) => (v === null || v === undefined || String(v).trim()==='' ? null : String(v).trim());
+  const str = (v: unknown) => (v === null || v === undefined || String(v).trim()==='' ? null : String(v).trim());
   norm.bl_number = str(input.bl_number);         // always text
   norm.pol = str(input.pol);
   norm.pod = str(input.pod);
@@ -51,7 +55,11 @@ export function validateRow(input: Record<string, any>): RowValidation {
   norm.list_name = str(input.list_name);
 
   // Optional numbers
-  const num = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
+  const num = (v: unknown) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
   let free_days = num(input.free_days);
   if (free_days === null || !Number.isFinite(free_days) || free_days < 0) free_days = 7;
   norm.free_days = free_days;
@@ -99,19 +107,19 @@ export function validateRow(input: Record<string, any>): RowValidation {
   return { ok, warnings, errors, normalized: norm };
 }
 
-export function validateBatch(rows: Record<string, any>[]) {
+export function validateBatch(rows: Record<string, unknown>[]) {
   const results = rows.map((r, i) => ({ index: i, ...validateRow(r) }));
   // in-file duplicates by container_no
   const seen = new Map<string, number[]>();
   for (const r of results) {
-    const key = r.normalized.container_no || '';
+    const key = (r.normalized.container_no as string) || '';
     if (!key) continue;
     const arr = seen.get(key) || [];
     arr.push(r.index);
     seen.set(key, arr);
   }
   let duplicates = 0;
-  for (const [key, idxs] of seen) {
+  for (const [, idxs] of seen) {
     if (idxs.length > 1) {
       duplicates += idxs.length;
       for (const i of idxs) {

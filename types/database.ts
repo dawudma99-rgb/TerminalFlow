@@ -338,6 +338,89 @@ export type Database = {
           },
         ]
       }
+      email_drafts: {
+        Row: {
+          id: string
+          organization_id: string
+          container_id: string
+          event_type: string
+          status: string
+          to_email: string | null
+          subject: string
+          body_text: string
+          metadata: Json | null
+          generated_at: string
+          sent_at: string | null
+          skipped_at: string | null
+          created_by_user_id: string | null
+          approved_by_user_id: string | null
+          last_error: string | null
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          container_id: string
+          event_type: string
+          status?: string
+          to_email?: string | null
+          subject: string
+          body_text: string
+          metadata?: Json | null
+          generated_at?: string
+          sent_at?: string | null
+          skipped_at?: string | null
+          created_by_user_id?: string | null
+          approved_by_user_id?: string | null
+          last_error?: string | null
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          container_id?: string
+          event_type?: string
+          status?: string
+          to_email?: string | null
+          subject?: string
+          body_text?: string
+          metadata?: Json | null
+          generated_at?: string
+          sent_at?: string | null
+          skipped_at?: string | null
+          created_by_user_id?: string | null
+          approved_by_user_id?: string | null
+          last_error?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_container_id_fkey"
+            columns: ["container_id"]
+            isOneToOne: false
+            referencedRelation: "containers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drafts_approved_by_user_id_fkey"
+            columns: ["approved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string

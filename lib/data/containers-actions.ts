@@ -9,6 +9,9 @@ import {
   resolveMilestone,
   type ContainerMilestone,
 } from '@/lib/utils/milestones'
+
+// Re-export ContainerMilestone for convenience
+export type { ContainerMilestone } from '@/lib/utils/milestones'
 import { logger } from '@/lib/utils/logger'
 import { createAlertsForContainerChange } from '@/lib/data/alerts-logic'
 import { ensureMainListForCurrentOrg } from '@/lib/data/lists-actions'
@@ -17,12 +20,32 @@ export type ContainerRecord = Database['public']['Tables']['containers']['Row']
 export type ContainerInsert = Database['public']['Tables']['containers']['Insert']
 export type ContainerUpdate = Database['public']['Tables']['containers']['Update']
 
+// Extended types that include pol and pod fields used in the codebase
+// These fields may not exist in the database schema yet but are used throughout the app
+export type ContainerInsertWithPolPod = ContainerInsert & {
+  pol?: string | null
+  pod?: string | null
+}
+
+export type ContainerUpdateWithPolPod = ContainerUpdate & {
+  pol?: string | null
+  pod?: string | null
+}
+
 // Extended type with computed fields
+// This includes all database ContainerRecord fields plus computed fields from ContainerWithDerivedFields
+// Note: pol and pod are included here even though they may not be in the DB schema yet,
+// as they are used throughout the codebase
 export type ContainerRecordWithComputed = ContainerRecord & {
-  days_left?: number | null
-  status?: string
-  demurrage_fees?: number
-  detention_fees?: number
+  days_left: number | null
+  status: string
+  demurrage_fees: number
+  detention_fees: number
+  lfd_date: string | null
+  detention_chargeable_days: number | null
+  detention_status: 'Safe' | 'Warning' | 'Overdue' | null
+  pol?: string | null
+  pod?: string | null
 }
 
 async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
@@ -69,10 +92,31 @@ export const fetchContainers = cache(async function fetchContainers(listId?: str
   if (error) throw new Error(`Supabase fetchContainers error: ${error.message}`)
   if (!data) return []
 
-  // Apply computeDerivedFields to each item to get status and days_left
-  const withDerived = data.map((c: ContainerRecord) => computeDerivedFields(c as ContainerRecord))
+  // TEMP DEBUG: Log fetch parameters and raw container data
+  console.log('[TEMP DEBUG fetchContainers]', {
+    listId: listId || 'ALL_LISTS',
+    orgId,
+    totalContainers: data.length,
+    containers: data.map((c: ContainerRecord) => ({
+      id: c.id,
+      container_no: c.container_no,
+      is_closed: c.is_closed,
+      list_id: c.list_id,
+      arrival_date: c.arrival_date,
+    })),
+  })
 
-  return withDerived as ContainerRecordWithComputed[]
+  // Apply computeDerivedFields to each item to get status and days_left
+  // The database ContainerRecord has all fields that ContainerRecord (from utils) needs
+  // computeDerivedFields returns ContainerWithDerivedFields which extends ContainerRecord
+  const withDerived: ContainerRecordWithComputed[] = data.map((c: ContainerRecord) => {
+    const computed = computeDerivedFields(c as Parameters<typeof computeDerivedFields>[0])
+    // Merge database fields with computed fields
+    // Type assertion is safe because ContainerRecordWithComputed includes all DB fields plus computed
+    return { ...c, ...computed } as ContainerRecordWithComputed
+  })
+
+  return withDerived
 })
 
 // --- Create ---
@@ -83,7 +127,7 @@ export const fetchContainers = cache(async function fetchContainers(listId?: str
  * Always sets list_id (never null).
  */
 export async function insertContainer(
-  container: Omit<ContainerInsert, 'organization_id' | 'list_id'>,
+  container: Omit<ContainerInsertWithPolPod, 'organization_id' | 'list_id'>,
   listId?: string | null
 ) {
   const supabase = await createClient()
@@ -152,7 +196,7 @@ export async function insertContainer(
 /**
  * Update an existing container record by ID.
  */
-type ContainerUpdateInput = Partial<ContainerUpdate> & {
+type ContainerUpdateInput = Partial<ContainerUpdateWithPolPod> & {
   milestone?: ContainerMilestone | null
 }
 

@@ -4,6 +4,9 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { logger } from '@/lib/utils/logger';
 import { ensureMainListForCurrentOrg } from '@/lib/data/lists-actions';
+import type { Database } from '@/types/database';
+
+type ContainerInsert = Database['public']['Tables']['containers']['Insert'];
 
 async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -25,16 +28,19 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-function normalizeEmptyString(v: any): any {
+function normalizeEmptyString(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   if (typeof v === 'string') {
     const trimmed = v.trim();
     return trimmed === '' ? null : trimmed;
   }
-  return v;
+  return String(v).trim() || null;
 }
 
-export async function commitImport(rows: Array<Record<string, any>>): Promise<{
+// Type for import row data
+type ImportRow = Record<string, unknown>;
+
+export async function commitImport(rows: Array<ImportRow>): Promise<{
   inserted: number;
   updated: number;
   skipped: number;
@@ -65,17 +71,34 @@ export async function commitImport(rows: Array<Record<string, any>>): Promise<{
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
-
-      const payload: any = {
-        container_no: String(row.container_no || '').trim().toUpperCase(),
-        arrival_date: row.arrival_date || null,
-        free_days: row.free_days ?? 7,
+      const containerNo = String(row.container_no || '').trim().toUpperCase();
+      const arrivalDateValue = row.arrival_date;
+      const arrivalDate = arrivalDateValue ? String(arrivalDateValue) : '';
+      
+      const freeDaysValue = row.free_days;
+      let freeDays = 7;
+      if (typeof freeDaysValue === 'number' && Number.isFinite(freeDaysValue) && freeDaysValue >= 0) {
+        freeDays = freeDaysValue;
+      } else if (freeDaysValue != null) {
+        const parsed = Number(freeDaysValue);
+        if (Number.isFinite(parsed) && parsed >= 0) {
+          freeDays = parsed;
+        }
+      }
+      
+      // Use pol as port if available, otherwise default to empty string
+      const portValue = typeof row.pol === 'string' && row.pol.trim() ? row.pol.trim() : '';
+      
+      const payload: ContainerInsert = {
+        container_no: containerNo,
+        arrival_date: arrivalDate,
+        free_days: freeDays,
+        port: portValue,
         organization_id: orgId,
         list_id: listId,
         // Optional fields - normalize empty strings to null
+        // Note: pol and pod are not in the database schema, so we don't include them
         bl_number: normalizeEmptyString(row.bl_number),
-        pol: normalizeEmptyString(row.pol),
-        pod: normalizeEmptyString(row.pod),
         carrier: normalizeEmptyString(row.carrier),
         container_size: normalizeEmptyString(row.container_size),
         assigned_to: normalizeEmptyString(row.assigned_to),
@@ -96,15 +119,16 @@ export async function commitImport(rows: Array<Record<string, any>>): Promise<{
       }
 
       payloads.push({ index: i, payload });
-    } catch (err: any) {
-      errors.push({ index: i, message: err?.message || 'Failed to prepare row' });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to prepare row';
+      errors.push({ index: i, message: errorMessage });
     }
   }
 
   // Chunk and insert
   const chunks = chunk(payloads, 500);
   let inserted = 0;
-  let updated = 0;
+  const updated = 0; // We can't easily distinguish, so set to 0
   let skipped = 0;
 
   for (const chunk of chunks) {
@@ -133,7 +157,7 @@ export async function commitImport(rows: Array<Record<string, any>>): Promise<{
 
   return {
     inserted,
-    updated: 0, // We can't easily distinguish, so set to 0
+    updated,
     skipped: skipped + (payloads.length - inserted - errors.length),
     errors,
   };
