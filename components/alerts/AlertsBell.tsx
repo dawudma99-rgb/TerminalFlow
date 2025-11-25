@@ -115,11 +115,8 @@ export function AlertsBell() {
     }
   }, [latestAlert, resetLatest])
 
-  // Check for seen_at - it may exist in DB even if not in types
-  const unreadAlerts = alerts.filter((alert) => {
-    const alertAny = alert as any
-    return !alertAny.seen_at
-  })
+  // Filter alerts that haven't been seen (seen_at is null or undefined)
+  const unreadAlerts = alerts.filter((alert) => !alert.seen_at)
   const unreadCount = unreadAlerts.length
   const displayCount = unreadCount > 9 ? '9+' : unreadCount.toString()
 
@@ -138,18 +135,24 @@ export function AlertsBell() {
     if (isOpen && unreadCount > 0) {
       // Mark all unread alerts as seen (fire-and-forget)
       const unreadIds = unreadAlerts.map((a) => a.id)
-      markAlertsSeen(unreadIds).catch((err) => {
-        console.error('Error marking alerts as seen:', err)
-      })
-      // Optimistically update local state
+      const seenAtTimestamp = new Date().toISOString()
+      
+      // Optimistically update local state immediately for instant UI feedback
       setAlerts((prev) =>
-        prev.map((alert) => {
-          const alertAny = alert as any
-          return unreadIds.includes(alert.id)
-            ? { ...alert, seen_at: new Date().toISOString() } as any
+        prev.map((alert) =>
+          unreadIds.includes(alert.id)
+            ? { ...alert, seen_at: seenAtTimestamp }
             : alert
-        })
+        )
       )
+      
+      // Then update in database (errors are logged but don't affect UI)
+      markAlertsSeen(unreadIds).catch((err) => {
+        logger.error('[AlertsBell] Error marking alerts as seen', {
+          error: err instanceof Error ? err.message : String(err),
+          alertIds: unreadIds,
+        })
+      })
     }
   }
 
@@ -199,8 +202,7 @@ export function AlertsBell() {
             <ScrollArea className="h-[300px]">
               <div className="space-y-1 p-1">
                 {alerts.map((alert) => {
-                  const alertAny = alert as any
-                  const isUnread = !alertAny.seen_at
+                  const isUnread = !alert.seen_at
                   const isHighlighted = highlightedAlertId === alert.id
                   return (
                     <DropdownMenuItem

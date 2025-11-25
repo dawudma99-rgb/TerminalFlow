@@ -1,4 +1,4 @@
-import { fetchAlerts } from '@/lib/data/alerts-actions'
+import { fetchAlertsPage } from '@/lib/data/alerts-actions'
 import {
   Table,
   TableBody,
@@ -11,6 +11,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Bell } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 function getSeverityBadge(severity: string) {
   switch (severity.toLowerCase()) {
@@ -33,8 +36,18 @@ function formatDate(dateString: string): string {
   })
 }
 
-export default async function AlertsPage() {
-  const alerts = await fetchAlerts({ limit: 200 })
+const PAGE_SIZE = 50
+
+export default async function AlertsPage({
+  searchParams,
+}: {
+  searchParams: { page?: string }
+}) {
+  const page = parseInt(searchParams.page || '1', 10)
+  const { alerts, hasMore } = await fetchAlertsPage({
+    page: Math.max(1, page),
+    pageSize: PAGE_SIZE,
+  })
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -93,6 +106,42 @@ export default async function AlertsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {/* Pagination controls */}
+          {alerts.length > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Page {page} • Showing {alerts.length} alert{alerts.length !== 1 ? 's' : ''}
+              </div>
+              <div className="flex items-center gap-2">
+                {page > 1 ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/dashboard/alerts?page=${page - 1}`}>
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                )}
+                {hasMore ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/dashboard/alerts?page=${page + 1}`}>
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </CardContent>

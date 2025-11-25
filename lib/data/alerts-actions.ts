@@ -4,10 +4,12 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
 import { logger } from '@/lib/utils/logger'
+import { revalidatePath } from 'next/cache'
 
 export type AlertRow = Database['public']['Tables']['alerts']['Row'] & {
   container_no?: string | null
   list_name?: string | null
+  seen_at?: string | null
 }
 
 /**
@@ -104,6 +106,94 @@ export const fetchAlerts = cache(async function fetchAlerts(params?: {
       ? (list[0]?.name ?? null)
       : (list?.name ?? null)
 
+      return {
+        id: alert.id,
+        organization_id: alert.organization_id,
+        container_id: alert.container_id,
+        list_id: alert.list_id,
+        event_type: alert.event_type,
+        severity: alert.severity,
+        title: alert.title,
+        message: alert.message,
+        metadata: alert.metadata,
+        created_by_user_id: alert.created_by_user_id,
+        created_at: alert.created_at,
+        seen_at: alert.seen_at ?? null,
+        // Include joined fields
+        container_no,
+        list_name,
+      } as AlertRow
+  })
+})
+
+// --- Paginated Read ---
+/**
+ * Fetch alerts with pagination support.
+ * Returns alerts plus a hasMore boolean indicating if there are more pages.
+ */
+export async function fetchAlertsPage(params: {
+  page: number
+  pageSize: number
+}): Promise<{ alerts: AlertRow[]; hasMore: boolean }> {
+  const supabase = await createClient()
+
+  // Get user and organization
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { alerts: [], hasMore: false }
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError || !profile?.organization_id) {
+    return { alerts: [], hasMore: false }
+  }
+
+  const orgId = profile.organization_id
+  const { page, pageSize } = params
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  // Build query with joins to get container_no and list_name
+  let query = supabase
+    .from('alerts')
+    .select(
+      `
+      *,
+      containers!alerts_container_id_fkey(container_no),
+      container_lists!alerts_list_id_fkey(name)
+    `,
+      { count: 'exact' }
+    )
+    .eq('organization_id', orgId)
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  const { data, error, count } = await query
+
+  if (error) {
+    logger.error('Supabase fetchAlertsPage error', { error: error.message })
+    throw new Error(`Supabase fetchAlertsPage error: ${error.message}`)
+  }
+
+  if (!data) return { alerts: [], hasMore: false }
+
+  // Map the results to AlertRow format
+  const alerts: AlertRow[] = data.map((alert: any) => {
+    const container = alert.containers
+    const container_no = Array.isArray(container)
+      ? (container[0]?.container_no ?? null)
+      : (container?.container_no ?? null)
+
+    const list = alert.container_lists
+    const list_name = Array.isArray(list)
+      ? (list[0]?.name ?? null)
+      : (list?.name ?? null)
+
     return {
       id: alert.id,
       organization_id: alert.organization_id,
@@ -116,12 +206,17 @@ export const fetchAlerts = cache(async function fetchAlerts(params?: {
       metadata: alert.metadata,
       created_by_user_id: alert.created_by_user_id,
       created_at: alert.created_at,
-      // Include joined fields
+      seen_at: alert.seen_at ?? null,
       container_no,
       list_name,
     } as AlertRow
   })
-})
+
+  // Determine if there are more pages
+  const hasMore = count !== null ? from + alerts.length < count : false
+
+  return { alerts, hasMore }
+}
 
 // --- Update ---
 /**
@@ -157,11 +252,11 @@ export async function markAlertsSeen(ids: string[]): Promise<void> {
   const orgId = profile.organization_id
 
   try {
-    // Note: seen_at field doesn't exist in the alerts table schema
-    // If this functionality is needed, the database schema should be updated first
+    // Update seen_at to current timestamp for alerts matching the IDs and organization
+    // Filtering by organization_id ensures users can only mark their own org's alerts as seen
     const { error } = await supabase
       .from('alerts')
-      .update({})
+      .update({ seen_at: new Date().toISOString() })
       .in('id', ids)
       .eq('organization_id', orgId)
 
@@ -172,6 +267,10 @@ export async function markAlertsSeen(ids: string[]): Promise<void> {
         alertIds: ids,
         orgId,
       })
+    } else {
+      // Revalidate paths that display alerts
+      revalidatePath('/dashboard')
+      revalidatePath('/dashboard/alerts')
     }
   } catch (err) {
     // Catch any unexpected errors and log them
