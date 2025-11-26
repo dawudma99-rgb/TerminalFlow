@@ -1,10 +1,9 @@
 'use server'
 
-import { cache } from 'react'
-import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
 import { logger } from '@/lib/utils/logger'
 import { revalidatePath } from 'next/cache'
+import { getServerAuthContext, type ServerAuthContext } from '@/lib/auth/serverAuthContext'
 
 export type AlertRow = Database['public']['Tables']['alerts']['Row'] & {
   container_no?: string | null
@@ -12,52 +11,26 @@ export type AlertRow = Database['public']['Tables']['alerts']['Row'] & {
   seen_at?: string | null
 }
 
-/**
- * Get the current authenticated user's organization ID.
- * Reusable helper for server actions.
- */
-async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  if (error || !profile?.organization_id) throw new Error('User profile not found')
-  return profile.organization_id
-}
-
 // --- Read ---
 /**
  * Fetch alerts for the current authenticated user / organization.
  * Returns alerts with joined container_no and list_name.
  * Ordered by created_at DESC (newest first).
- * Cached to prevent duplicate queries during render.
  */
-export const fetchAlerts = cache(async function fetchAlerts(params?: {
+export async function fetchAlerts(params?: {
   limit?: number
   onlyUnread?: boolean
 }): Promise<AlertRow[]> {
-  const supabase = await createClient()
+  let context: ServerAuthContext
   
-  // Get user and organization
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  try {
+    context = await getServerAuthContext()
+  } catch {
+    // If not authenticated, return empty array (graceful failure)
     return []
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile?.organization_id) {
-    return []
-  }
-
-  const orgId = profile.organization_id
+  
+  const { supabase, organizationId } = context
   const limit = params?.limit ?? 50
   const onlyUnread = params?.onlyUnread ?? false
 
@@ -71,7 +44,7 @@ export const fetchAlerts = cache(async function fetchAlerts(params?: {
       containers!alerts_container_id_fkey(container_no),
       container_lists!alerts_list_id_fkey(name)
     `)
-    .eq('organization_id', orgId)
+    .eq('organization_id', organizationId)
 
   // Filter by seen_at if onlyUnread is true
   // Note: seen_at may exist in DB even if not in types yet
@@ -124,7 +97,7 @@ export const fetchAlerts = cache(async function fetchAlerts(params?: {
         list_name,
       } as AlertRow
   })
-})
+}
 
 // --- Paginated Read ---
 /**
@@ -135,25 +108,17 @@ export async function fetchAlertsPage(params: {
   page: number
   pageSize: number
 }): Promise<{ alerts: AlertRow[]; hasMore: boolean }> {
-  const supabase = await createClient()
-
-  // Get user and organization
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  let context: ServerAuthContext
+  
+  try {
+    context = await getServerAuthContext()
+  } catch {
+    // If not authenticated, return empty result (graceful failure)
     return { alerts: [], hasMore: false }
   }
+  
+  const { supabase, organizationId } = context
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile?.organization_id) {
-    return { alerts: [], hasMore: false }
-  }
-
-  const orgId = profile.organization_id
   const { page, pageSize } = params
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
@@ -169,7 +134,7 @@ export async function fetchAlertsPage(params: {
     `,
       { count: 'exact' }
     )
-    .eq('organization_id', orgId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
     .range(from, to)
 
@@ -229,27 +194,16 @@ export async function markAlertsSeen(ids: string[]): Promise<void> {
     return
   }
 
-  const supabase = await createClient()
-
-  // Get user and organization
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    // No user - do nothing (graceful failure)
+  let context: ServerAuthContext
+  
+  try {
+    context = await getServerAuthContext()
+  } catch {
+    // No user/profile/org - do nothing (graceful failure)
     return
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile?.organization_id) {
-    // No profile/org - do nothing (graceful failure)
-    return
-  }
-
-  const orgId = profile.organization_id
+  
+  const { supabase, organizationId } = context
 
   try {
     // Update seen_at to current timestamp for alerts matching the IDs and organization
@@ -258,14 +212,14 @@ export async function markAlertsSeen(ids: string[]): Promise<void> {
       .from('alerts')
       .update({ seen_at: new Date().toISOString() })
       .in('id', ids)
-      .eq('organization_id', orgId)
+      .eq('organization_id', organizationId)
 
     if (error) {
       // Log but don't throw - graceful failure
       logger.error('Supabase markAlertsSeen error', {
         error: error.message,
         alertIds: ids,
-        orgId,
+        orgId: organizationId,
       })
     } else {
       // Revalidate paths that display alerts

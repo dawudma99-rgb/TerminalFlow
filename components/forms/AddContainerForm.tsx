@@ -142,6 +142,7 @@ interface AddContainerFormProps {
 interface ContainerFormData {
   // Basic Information
   container_no: string
+  bl_number: string
   pol: string
   pod: string
   arrival_date: string
@@ -171,6 +172,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
   const { profile } = useAuth()
   const [formData, setFormData] = useState<ContainerFormData>({
     container_no: '',
+    bl_number: '',
     pol: '',
     pod: '',
     arrival_date: '',
@@ -373,6 +375,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
   const resetForm = () => {
     setFormData({
       container_no: '',
+      bl_number: '',
       pol: '',
       pod: '',
       arrival_date: '',
@@ -492,6 +495,18 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   {validationErrors.container_no && (
                     <p className="text-sm text-destructive mt-1">{validationErrors.container_no}</p>
                   )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="bl_number" className="text-sm font-medium">
+                    B/L Number
+                  </Label>
+                  <Input
+                    id="bl_number"
+                    value={formData.bl_number}
+                    onChange={(e) => handleInputChange('bl_number', e.target.value)}
+                    placeholder="Enter B/L number"
+                  />
                 </div>
                 
                 <div className="space-y-2">

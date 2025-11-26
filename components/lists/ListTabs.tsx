@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, X, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { logger } from '@/lib/utils/logger'
 
@@ -18,15 +18,36 @@ export function ListTabs() {
   const [newListName, setNewListName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
+  // Safety net: Auto-clear switchingListId once the list becomes active
+  // This ensures the spinner disappears even if the finally block has timing issues
+  useEffect(() => {
+    if (switchingListId && switchingListId === activeListId) {
+      setSwitchingListId(null)
+    }
+  }, [activeListId, switchingListId])
+
   const handleSwitchList = async (listId: string) => {
-    if (listId === activeListId) return
-    setSwitchingListId(listId)
+    // Defensive check: don't switch if already active
+    if (listId === activeListId) {
+      // Clear any stuck spinner state
+      if (switchingListId === listId) {
+        setSwitchingListId(null)
+      }
+      return
+    }
+
+    // Double-check before setting spinner state
+    if (listId !== activeListId) {
+      setSwitchingListId(listId)
+    }
+
     try {
       await setActiveList(listId)
     } catch (error) {
       logger.error('[ListTabs] Failed to switch list:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to switch list')
     } finally {
+      // Always clear spinner state, even on error
       setSwitchingListId(null)
     }
   }
@@ -112,6 +133,9 @@ export function ListTabs() {
     >
       {lists.map((list) => {
         const isActive = list.id === activeListId
+        // Spinner should only appear on the tab that is currently being switched TO,
+        // and only while that list is NOT yet active
+        const showSpinner = switchingListId === list.id && !isActive
         return (
           <div key={list.id} className="group relative flex items-center">
             <button
@@ -127,12 +151,12 @@ export function ListTabs() {
               )}
             >
               <span className="truncate">{list.name}</span>
-              {switchingListId === list.id && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+              {showSpinner && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
             </button>
             {list.name !== 'Main List' && !isActive && (
               <ConfirmDialog
-                title="Delete List"
-                description={`Are you sure you want to delete "${list.name}"? This action cannot be undone.`}
+                title="Delete list and all containers?"
+                description={`This will permanently delete "${list.name}" and all containers inside it. This action cannot be undone.`}
                 onConfirm={() => handleDeleteList(list.id)}
                 confirmText="Delete"
                 cancelText="Cancel"
@@ -162,7 +186,7 @@ export function ListTabs() {
             <Plus className="h-4 w-4" />
           </button>
         </DialogTrigger>
-        <DialogContent aria-describedby="create-list-description">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Create new list</DialogTitle>
             <DialogDescription id="create-list-description">

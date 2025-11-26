@@ -28,7 +28,7 @@ export const EmptyStates = memo(function EmptyStates({
 
   if (!hasContainers) {
     return (
-      <div className="flex h-[360px] flex-col items-center justify-center rounded-md border border-dashed border-[#D4D7DE] bg-white text-center">
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
         <Container className="mb-3 h-10 w-10 text-[#9CA3AF]" />
         <h3 className="text-sm font-semibold text-slate-700 tracking-tight">
           No containers yet
@@ -42,7 +42,7 @@ export const EmptyStates = memo(function EmptyStates({
 
   if (!hasFilteredContainers) {
     return (
-      <div className="flex h-[280px] flex-col items-center justify-center rounded-md border border-dashed border-[#D4D7DE] bg-white text-center">
+      <div className="flex flex-1 flex-col items-center justify-center text-center">
         <Container className="mb-3 h-9 w-9 text-[#9CA3AF]" />
         <h3 className="text-sm font-semibold text-slate-700 tracking-tight">
           No matches for the current filters

@@ -8,6 +8,7 @@ import {
 } from '@/lib/email/clientEmailFormatter'
 import { logger } from '@/lib/utils/logger'
 import { sendAlertEmail } from '@/lib/email/sendAlertEmail'
+import { getServerAuthContext, type ServerAuthContext } from '@/lib/auth/serverAuthContext'
 
 type EmailDraftRow = Database['public']['Tables']['email_drafts']['Row']
 type ContainerRow = Database['public']['Tables']['containers']['Row']
@@ -22,46 +23,21 @@ async function resolveOrgContext(): Promise<{
   supabase: Awaited<ReturnType<typeof createClient>>
   context: OrgContext | null
 }> {
-  const supabase = await createClient()
-
   try {
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      logger.error('[email-drafts-actions] Unable to resolve auth user', {
-        error: authError?.message,
-      })
-      return { supabase, context: null }
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile?.organization_id) {
-      logger.error('[email-drafts-actions] Unable to resolve organization', {
-        error: profileError?.message,
-        user_id: user.id,
-      })
-      return { supabase, context: null }
-    }
-
+    const authContext = await getServerAuthContext()
     return {
-      supabase,
+      supabase: authContext.supabase,
       context: {
-        userId: user.id,
-        organizationId: profile.organization_id,
+        userId: authContext.user.id,
+        organizationId: authContext.organizationId,
       },
     }
   } catch (error) {
     logger.error('[email-drafts-actions] Exception resolving org context', {
       error: error instanceof Error ? error.message : String(error),
     })
+    // Return a supabase client even if auth fails (for graceful error handling)
+    const supabase = await createClient()
     return { supabase, context: null }
   }
 }

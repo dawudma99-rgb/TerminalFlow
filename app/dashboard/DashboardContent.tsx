@@ -2,7 +2,6 @@
 
 import { useContainers } from '@/lib/data/useContainers'
 import { useListsContext } from '@/components/providers/ListsProvider'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { LoadingState } from '@/components/ui/LoadingState'
@@ -26,7 +25,7 @@ import { OperationalCard } from '@/components/ui/OperationalCard'
  */
 export function DashboardContent() {
   const { activeListId } = useListsContext()
-  const { containers, loading, error, reload } = useContainers(activeListId)
+  const { containers, loading, isInitialLoading, isRefreshing, error, reload } = useContainers(activeListId)
 
   const metrics = useMemo(() => {
     const total = containers.length
@@ -66,46 +65,42 @@ export function DashboardContent() {
     [containers],
   )
 
-  if (loading) {
+  if (isInitialLoading) {
     return (
-      <AppLayout>
-        <main className="p-8 bg-[#F9FAFB] min-h-screen space-y-8">
-          <header>
-            <div>
-              <h1 className="text-2xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
-              <p className="text-sm text-[#6B7280]">Overview of container activity and demurrage exposure</p>
-            </div>
-          </header>
-          <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
-            <CardContent className="py-12">
-              <LoadingState message="Loading containers..." />
-            </CardContent>
-          </Card>
-        </main>
-      </AppLayout>
+      <main className="p-8 bg-[#F9FAFB] min-h-screen space-y-8">
+        <header>
+          <div>
+            <h1 className="text-2xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
+            <p className="text-sm text-[#6B7280]">Overview of container activity and demurrage exposure</p>
+          </div>
+        </header>
+        <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
+          <CardContent className="py-12">
+            <LoadingState message="Loading containers..." />
+          </CardContent>
+        </Card>
+      </main>
     )
   }
 
-  if (error) {
+  if (error && containers.length === 0) {
     return (
-      <AppLayout>
-        <main className="p-8 bg-[#F9FAFB] min-h-screen space-y-8">
-          <header>
-            <div>
-              <h1 className="text-2xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
-              <p className="text-sm text-[#6B7280]">Overview of container activity and demurrage exposure</p>
-            </div>
-          </header>
-          <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
-            <CardContent className="py-8">
-              <ErrorAlert 
-                message={error.message || 'Failed to load containers'}
-                onRetry={reload}
-              />
-            </CardContent>
-          </Card>
-        </main>
-      </AppLayout>
+      <main className="p-8 bg-[#F9FAFB] min-h-screen space-y-8">
+        <header>
+          <div>
+            <h1 className="text-2xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
+            <p className="text-sm text-[#6B7280]">Overview of container activity and demurrage exposure</p>
+          </div>
+        </header>
+        <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
+          <CardContent className="py-8">
+            <ErrorAlert 
+              message={error.message || 'Failed to load containers'}
+              onRetry={reload}
+            />
+          </CardContent>
+        </Card>
+      </main>
     )
   }
 
@@ -133,43 +128,48 @@ export function DashboardContent() {
   ]
 
   return (
-    <AppLayout>
-      <main className="p-8 bg-[#F9FAFB] min-h-screen space-y-8">
-        <header>
-          <div>
-            <h1 className="text-2xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
-            <p className="text-sm text-[#6B7280]">Overview of container activity and demurrage exposure</p>
-          </div>
-        </header>
+    <main className="p-8 bg-[#F9FAFB] min-h-screen space-y-8">
+      <header>
+        <div>
+          <h1 className="text-2xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
+          <p className="text-sm text-[#6B7280]">
+            Overview of container activity and demurrage exposure
+            {isRefreshing && (
+              <span className="ml-2 text-xs text-muted-foreground">
+                Refreshing…
+              </span>
+            )}
+          </p>
+        </div>
+      </header>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statCards.map((stat) => (
-            <KpiCard
-              key={stat.label}
-              title={stat.label}
-              value={stat.value}
-              icon={stat.icon}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statCards.map((stat) => (
+          <KpiCard
+            key={stat.label}
+            title={stat.label}
+            value={stat.value}
+            icon={stat.icon}
+          />
+        ))}
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <AttentionCard containers={attentionContainers} />
+        <OperationalCard />
+      </section>
+
+      {containers.length === 0 && (
+        <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
+          <CardContent>
+            <EmptyState
+              title="No containers yet"
+              description="Start tracking demurrage and detention by adding your first container."
+              icon={<LayoutDashboard className="h-12 w-12 text-muted-foreground" />}
             />
-          ))}
-        </section>
-
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <AttentionCard containers={attentionContainers} />
-          <OperationalCard />
-        </section>
-
-        {containers.length === 0 && (
-          <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
-            <CardContent>
-              <EmptyState
-                title="No containers yet"
-                description="Start tracking demurrage and detention by adding your first container."
-                icon={<LayoutDashboard className="h-12 w-12 text-muted-foreground" />}
-              />
-            </CardContent>
-          </Card>
-        )}
-      </main>
-    </AppLayout>
+          </CardContent>
+        </Card>
+      )}
+    </main>
   )
 }

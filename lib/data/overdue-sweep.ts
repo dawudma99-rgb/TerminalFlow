@@ -6,21 +6,7 @@ import { computeDerivedFields } from '@/lib/utils/containers'
 import type { ContainerRecord } from '@/lib/utils/containers'
 import { logger } from '@/lib/utils/logger'
 import { createEmailDraftForContainerEvent } from '@/lib/data/email-drafts-actions'
-
-/**
- * Helper to get the current user's organization ID.
- */
-async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  if (error || !profile?.organization_id) throw new Error('User profile not found')
-  return profile.organization_id
-}
+import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 
 /**
  * Type for the overdue candidate result.
@@ -59,10 +45,8 @@ export type OverdueCandidate = {
  * @returns Array of overdue containers with computed fields
  */
 export async function getOverdueCandidatesForCurrentOrg(): Promise<OverdueCandidate[]> {
-  const supabase = await createClient()
-
-  // Get organization ID for the current user
-  const orgId = await getOrgId(supabase)
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   // Query containers for this organization
   // Filter to non-closed containers that have arrival_date and free_days
@@ -151,10 +135,8 @@ export type BackfillSummary = {
  * @returns Summary object with counts of total overdue containers, created alerts, and skipped (existing) alerts
  */
 export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSummary> {
-  const supabase = await createClient()
-
-  // Get organization ID for the current user
-  const orgId = await getOrgId(supabase)
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   // Get all overdue candidates
   const overdueCandidates = await getOverdueCandidatesForCurrentOrg()
@@ -295,10 +277,8 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
  * @returns Summary object with counts of total warning containers, created alerts, and skipped (existing) alerts
  */
 export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSummary> {
-  const supabase = await createClient()
-
-  // Get organization ID for the current user
-  const orgId = await getOrgId(supabase)
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   // Query containers for this organization
   // Filter to non-closed containers that have arrival_date and free_days

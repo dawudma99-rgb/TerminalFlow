@@ -4,8 +4,10 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorHandlerProvider } from "@/components/ErrorHandlerProvider";
 import { ListsProvider } from "@/components/providers/ListsProvider";
+import { AuthTransitionProvider } from "@/components/ui/AuthTransition";
 import { Toaster } from "sonner";
 import GlobalErrorBoundary from "./error-boundary";
+import { AuthProvider } from "@/lib/auth/useAuth";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -33,10 +35,14 @@ export default function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              <ListsProvider>
-                {children}
-                <Toaster position="top-right" richColors />
-              </ListsProvider>
+              <AuthTransitionProvider>
+                <AuthProvider>
+                  <ListsProvider>
+                    {children}
+                    <Toaster position="top-right" richColors />
+                  </ListsProvider>
+                </AuthProvider>
+              </AuthTransitionProvider>
             </ThemeProvider>
           </ErrorHandlerProvider>
         </GlobalErrorBoundary>

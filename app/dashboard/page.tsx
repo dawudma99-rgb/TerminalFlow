@@ -12,30 +12,24 @@ import { DashboardContent } from './DashboardContent'
  * If they fail, the dashboard still renders normally.
  */
 export default async function DashboardPage() {
-  // Run the overdue backfill automatically on dashboard load
-  // This ensures overdue containers get alerts created automatically
-  // Errors are caught and logged but don't block dashboard rendering
-  try {
-    await backfillOverdueAlertsForCurrentOrg()
-  } catch (err) {
-    // Log error but don't block dashboard rendering
-    logger.error('[DashboardPage] Failed to backfill overdue alerts', {
-      error: err instanceof Error ? err.message : String(err),
+  // Kick off both backfills in the background
+  void Promise.allSettled([
+    backfillOverdueAlertsForCurrentOrg(),
+    backfillWarningAlertsForCurrentOrg(),
+  ]).then((results) => {
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const label = index === 0 ? 'overdue' : 'warning'
+        logger.error(`[DashboardPage] Failed to backfill ${label} alerts`, {
+          error:
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason),
+        })
+      }
     })
-  }
+  })
 
-  // Run the warning backfill automatically on dashboard load
-  // This ensures warning containers get alerts created automatically
-  // Errors are caught and logged but don't block dashboard rendering
-  try {
-    await backfillWarningAlertsForCurrentOrg()
-  } catch (err) {
-    // Log error but don't block dashboard rendering
-    logger.error('[DashboardPage] Failed to backfill warning alerts', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // Render the client component dashboard UI
+  // Immediately render dashboard UI
   return <DashboardContent />
 }

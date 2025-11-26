@@ -2,10 +2,9 @@
 
 'use server';
 
-import { cache } from 'react';
-import { createClient } from '@/lib/supabase/server';
 import { serializeContainersToCSV, type ContainerForExport } from '@/lib/csv/containers-serializer';
 import { fetchContainers } from '@/lib/data/containers-actions'; // returns computed fields
+import { getServerAuthContext } from '@/lib/auth/serverAuthContext';
 
 type ExportStatus =
   | 'All'
@@ -19,19 +18,6 @@ export type ExportContainersParams = {
   listId?: string | null;
   status?: ExportStatus; // optional filter
 };
-
-const getOrgId = cache(async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single();
-  if (error || !data?.organization_id) throw new Error('Profile/organization not found');
-  return data.organization_id as string;
-});
 
 function toExportRow(c: any): ContainerForExport {
   // Map DB+computed fields to export shape. Serializer will normalize dates/numbers.
@@ -86,7 +72,7 @@ function makeFilename(orgId: string) {
  * Returns filename and CSV string (UTF-8 BOM included by serializer).
  */
 export async function exportContainersCSV(params: ExportContainersParams = {}) {
-  const orgId = await getOrgId();
+  const { organizationId } = await getServerAuthContext();
   const listId = params.listId ?? null;
 
   // fetchContainers already applies org scoping via RLS
@@ -95,7 +81,7 @@ export async function exportContainersCSV(params: ExportContainersParams = {}) {
   const filtered = filterByStatus(rows, params.status);
   const exportRows = filtered.map(toExportRow);
   const csv = serializeContainersToCSV(exportRows);
-  const filename = makeFilename(orgId);
+  const filename = makeFilename(organizationId);
 
   return { filename, csv };
 }

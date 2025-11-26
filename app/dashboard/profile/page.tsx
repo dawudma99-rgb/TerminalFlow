@@ -3,10 +3,10 @@
 import { useAuth } from '@/lib/auth/useAuth'
 import { useEffect, useState } from 'react'
 import { LoadingState } from '@/components/ui/LoadingState'
-import { getOrganization, updateProfile } from '@/lib/data/user-actions'
+import { getCurrentOrganization } from '@/lib/data/organization-actions'
+import { updateProfile } from '@/lib/data/user-actions'
 import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -21,6 +21,7 @@ export default function ProfilePage() {
 
     if (!user || !profile) {
       logger.warn('[profile-page] No user or profile found after auth load')
+      setOrganization(null)
       setOrgLoading(false)
       return
     }
@@ -30,11 +31,14 @@ export default function ProfilePage() {
       logger.debug('[profile-page] Fetching organization for', { organizationId: profile.organization_id })
       try {
         if (profile.organization_id) {
-          const orgData = await getOrganization(profile.organization_id)
+          const orgData = await getCurrentOrganization()
           setOrganization(orgData)
+        } else {
+          setOrganization(null)
         }
       } catch (err) {
         logger.error('[profile-page] Error loading organization:', err)
+        setOrganization(null)
       } finally {
         setOrgLoading(false)
       }
@@ -62,31 +66,26 @@ export default function ProfilePage() {
 
   if (loading || orgLoading) {
     return (
-      <AppLayout>
-        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
-          <div className="flex h-full items-center justify-center">
-            <LoadingState message="Loading profile..." />
-          </div>
-        </main>
-      </AppLayout>
+      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <div className="flex h-full items-center justify-center">
+          <LoadingState message="Loading profile..." />
+        </div>
+      </main>
     )
   }
 
   if (!user || !profile) {
     return (
-      <AppLayout>
-        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
-            Please sign in to view your profile.
-          </div>
-        </main>
-      </AppLayout>
+      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
+          Please sign in to view your profile.
+        </div>
+      </main>
     )
   }
 
   return (
-    <AppLayout>
-      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+    <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -124,6 +123,5 @@ export default function ProfilePage() {
           </Card>
         </div>
       </main>
-    </AppLayout>
   )
 }

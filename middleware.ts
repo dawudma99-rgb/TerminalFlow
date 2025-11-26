@@ -9,21 +9,17 @@ export async function middleware(request: NextRequest) {
   
   const { supabase, response } = createClient(request)
   
-  // Refresh the session to ensure cookies are up-to-date and tokens are valid
-  // This ensures server actions have access to fresh authentication tokens
-  // The getSession() call will refresh the token if needed and update cookies via setAll()
-  logger.debug('[Middleware] Session refresh start')
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-  logger.debug('[Middleware] Session refresh done')
+  // Get user authentication - getUser() will refresh the session if needed
+  // This is more efficient than calling both getSession() and getUser()
+  console.time('middleware getUser')
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  console.timeEnd('middleware getUser')
   
-  if (sessionError) {
-    logger.error('[Middleware] Session refresh error:', sessionError.message)
-  } else {
-    logger.info('[Middleware] Session refreshed successfully', { hasSession: !!session, expiresAt: session?.expires_at })
+  if (userError) {
+    logger.error('[Middleware] getUser error:', userError.message)
+  } else if (user) {
+    logger.debug('[Middleware] User authenticated', { userId: user.id, email: user.email })
   }
-  
-  // Check user authentication for route protection
-  const { data: { user } } = await supabase.auth.getUser()
 
   // Protect any path starting with /dashboard
   if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
@@ -39,6 +35,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/dashboard/containers/:path*']
+  matcher: ['/dashboard/:path*']
 }
 

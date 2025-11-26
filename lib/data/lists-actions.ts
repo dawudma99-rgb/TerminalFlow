@@ -1,52 +1,42 @@
 'use server'
 
-import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
 import { revalidatePath } from 'next/cache'
 import { logger } from '@/lib/utils/logger'
+import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 
 export type ListRecord = Database['public']['Tables']['container_lists']['Row']
 export type ListInsert = Database['public']['Tables']['container_lists']['Insert']
 export type ListUpdate = Database['public']['Tables']['container_lists']['Update']
 
-/**
- * Get the current authenticated user's organization ID.
- * Reusable helper for server actions.
- */
-async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  if (error || !profile?.organization_id) throw new Error('User profile not found')
-  return profile.organization_id
-}
-
 // --- Read ---
 /**
  * Fetch all container lists for the current authenticated user's organization.
  * Returns lists ordered by creation date (oldest first).
- * Cached to prevent duplicate queries during render.
  */
-export const fetchLists = cache(async function fetchLists(): Promise<ListRecord[]> {
-  const supabase = await createClient()
-  const orgId = await getOrgId(supabase)
+export async function fetchLists(): Promise<ListRecord[]> {
+  console.time('server fetchLists')
+  const { supabase, organizationId } = await getServerAuthContext()
   
   const { data, error } = await supabase
     .from('container_lists')
     .select('*')
-    .eq('organization_id', orgId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: true })
 
-  if (error) throw new Error(`Supabase fetchLists error: ${error.message}`)
-  if (!data) return []
+  if (error) {
+    console.timeEnd('server fetchLists')
+    throw new Error(`Supabase fetchLists error: ${error.message}`)
+  }
+  if (!data) {
+    console.timeEnd('server fetchLists')
+    return []
+  }
 
+  console.timeEnd('server fetchLists')
   return data
-})
+}
 
 // --- Create ---
 /**
@@ -58,14 +48,13 @@ export async function createList(name: string): Promise<ListRecord> {
     throw new Error('List name is required')
   }
 
-  const supabase = await createClient()
-  const orgId = await getOrgId(supabase)
+  const { supabase, organizationId } = await getServerAuthContext()
 
   const { data, error } = await supabase
     .from('container_lists')
     .insert({
       name: name.trim(),
-      organization_id: orgId,
+      organization_id: organizationId,
     })
     .select()
     .single()
@@ -86,15 +75,14 @@ export async function createList(name: string): Promise<ListRecord> {
 export async function deleteList(id: string): Promise<void> {
   if (!id) throw new Error('List ID is required')
 
-  const supabase = await createClient()
-  const orgId = await getOrgId(supabase)
+  const { supabase, organizationId } = await getServerAuthContext()
 
   // Verify the list belongs to the organization
   const { data: list, error: checkError } = await supabase
     .from('container_lists')
     .select('id, organization_id')
     .eq('id', id)
-    .eq('organization_id', orgId)
+    .eq('organization_id', organizationId)
     .single()
 
   if (checkError || !list) {
@@ -106,7 +94,7 @@ export async function deleteList(id: string): Promise<void> {
     .from('container_lists')
     .delete()
     .eq('id', id)
-    .eq('organization_id', orgId)
+    .eq('organization_id', organizationId)
 
   if (error) throw new Error(`Supabase deleteList error: ${error.message}`)
 
@@ -133,28 +121,10 @@ export async function ensureMainListForCurrentOrg(): Promise<{
   lists: ListRecord[]
   activeListId: string | null
 }> {
-  const supabase = await createClient()
+  const { supabase, user, profile, organizationId } = await getServerAuthContext()
   
-  // Get current user
-  const { data: { user }, error: getUserError } = await supabase.auth.getUser()
-  if (getUserError || !user) {
-    throw new Error('User not authenticated')
-  }
-
   const userId = user.id
-  
-  // Get user's profile with current_list_id
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, organization_id, current_list_id')
-    .eq('id', userId)
-    .single()
-
-  if (profileError || !profile?.organization_id) {
-    throw new Error(`User profile not found: ${profileError?.message || 'no profile'}`)
-  }
-
-  const orgId = profile.organization_id
+  const orgId = organizationId
   const currentListId = profile.current_list_id
 
   // Fetch all lists for this org
@@ -287,7 +257,10 @@ export async function ensureMainListForCurrentOrg(): Promise<{
  * This persists the user's list selection across sessions.
  */
 export async function setActiveList(id: string | null): Promise<void> {
-  const supabase = await createClient()
+  const { supabase, user, profile: existingProfile, organizationId } = await getServerAuthContext()
+  
+  const userId = user.id
+  const orgId = organizationId
   
   // Force session validation by calling getSession() first
   // This ensures the JWT is loaded and attached to the client for RLS checks
@@ -310,48 +283,15 @@ export async function setActiveList(id: string | null): Promise<void> {
     expiresAt: session.expires_at,
   })
   
-  // Validate user exists - this also ensures auth.uid() will be available for RLS
-  const { data: { user }, error: getUserError } = await supabase.auth.getUser()
-  
-  if (getUserError) {
-    logger.error('[setActiveList] getUser() error:', getUserError.message)
-    throw new Error(`Authentication error: ${getUserError.message}`)
-  }
-  
-  if (!user) {
-    logger.error('[setActiveList] No user found after getUser()')
-    throw new Error('User authentication missing in server action — JWT not attached')
-  }
-  
-  const userId = user.id
+  logger.info('[setActiveList] User validated:', {
+    userId: user.id,
+    userEmail: user.email,
+  })
   
   logger.info('[setActiveList] User validated:', {
     userId: user.id,
     userEmail: user.email,
   })
-
-  // Verify profile exists and matches user ID
-  const { data: existingProfile, error: profileCheckError } = await supabase
-    .from('profiles')
-    .select('id, current_list_id')
-    .eq('id', userId)
-    .single()
-
-  if (profileCheckError) {
-    logger.error('[setActiveList] Profile check failed:', {
-      error: profileCheckError.message,
-      errorCode: profileCheckError.code,
-      userId,
-    })
-    throw new Error(`Profile check failed: ${profileCheckError.message}`)
-  }
-
-  if (!existingProfile) {
-    logger.error('[setActiveList] Profile not found for user:', userId)
-    throw new Error(`Profile not found for user ${userId}`)
-  }
-
-  const orgId = await getOrgId(supabase)
 
   logger.info('[setActiveList] Before update:', {
     userId,

@@ -10,24 +10,33 @@ import useSWR from 'swr'
 import { fetchContainers } from './containers-actions'
 import type { ContainerRecordWithComputed } from './containers-actions'
 import { useEffect, useRef } from 'react'
+import { useAuth } from '@/lib/auth/useAuth'
 
 export type ContainerWithComputed = ContainerRecordWithComputed
 
-export function useContainers(listId: string | null) {
-  const previousListIdRef = useRef<string | null>(null)
+export interface UseContainersReturn {
+  containers: ContainerWithComputed[]
+  loading: boolean
+  isInitialLoading: boolean
+  isRefreshing: boolean
+  isSwitchingList: boolean
+  error: Error | null
+  reload: () => Promise<void>
+}
 
-  // Track listId changes (reduced logging)
-  useEffect(() => {
-    previousListIdRef.current = listId
-  }, [listId])
+export function useContainers(listId: string | null): UseContainersReturn {
+  const { profile, loading: authLoading } = useAuth()
+  const orgId = profile?.organization_id
+  const previousListIdRef = useRef<string | null>(null)
+  const settledListIdRef = useRef<string | null>(null)
 
   const fetcher = async () => {
     const data = await fetchContainers(listId ?? undefined)
     return data
   }
 
-  // SWR key includes listId for proper cache isolation
-  const swrKey = ['containers', listId]
+  // SWR key includes organization_id and listId for proper cache isolation
+  const swrKey = orgId ? ['containers', orgId, listId] : null
 
   const { data, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
@@ -35,12 +44,52 @@ export function useContainers(listId: string | null) {
     keepPreviousData: true, // prevent flicker when switching lists
   })
 
+  // Track when we have settled data (not loading and have data)
+  // This represents the listId that corresponds to the currently displayed containers
+  useEffect(() => {
+    const authReady = !authLoading
+    const canFetch = authReady && !!orgId
+    const hasSettledData = canFetch && !isLoading && data !== undefined
+    
+    if (hasSettledData) {
+      // We have settled data for the current listId
+      settledListIdRef.current = listId
+    }
+  }, [listId, orgId, authLoading, isLoading, data])
+
+  const authReady = !authLoading
+  const canFetch = authReady && !!orgId
+  const loading = authLoading || (canFetch && isLoading)
+
+  // Compute new loading flags
+  const hasData = Array.isArray(data) && data.length > 0
+  const isInitialLoading = !hasData && (authLoading || (canFetch && isLoading))
+  const isRefreshing = hasData && (authLoading || (canFetch && isLoading))
+
+  // Detect if we're switching lists (not just refreshing the same list)
+  // isSwitchingList is true when:
+  // - We have orgId (ready to fetch)
+  // - We're currently loading
+  // - We had settled data for a different listId (listId changed)
+  // - This is NOT the initial load (we had previous data)
+  const isSwitchingList = Boolean(
+    orgId &&
+    isLoading &&
+    settledListIdRef.current !== null &&
+    listId !== settledListIdRef.current
+  )
+
   return {
-    containers: data ?? [],
-    loading: isLoading,
-    error: error as Error | null,
+    containers: canFetch ? (data ?? []) : [],
+    loading,
+    isInitialLoading,
+    isRefreshing,
+    isSwitchingList,
+    error: canFetch ? (error as Error | null) : null,
     reload: async () => {
-      await mutate()
+      if (canFetch) {
+        await mutate()
+      }
     },
   }
 }

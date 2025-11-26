@@ -15,7 +15,7 @@ export function Sidebar() {
   const activeItem = useMemo(() => getActiveNavItem(normalizedPathname), [normalizedPathname])
 
   return (
-    <aside className="flex w-64 flex-col border-r border-[#D1D5DB] bg-[#E5E7EB]">
+    <aside className="flex w-64 flex-col border-r border-[#D1D5DB] bg-[#E5E7EB] flex-shrink-0">
       <div className="border-b border-[#D1D5DB] px-6 py-5">
         <PortflowLogo size="sm" />
         <p className="mt-1 text-[11px] uppercase tracking-[0.22em] text-[#6B7280]">

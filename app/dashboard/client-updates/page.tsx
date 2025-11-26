@@ -1,6 +1,5 @@
 import { fetchPendingEmailDraftsForCurrentOrg } from '@/lib/data/email-drafts-actions'
 import { ClientUpdatesPageContent } from './ClientUpdatesPageContent'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { logger } from '@/lib/utils/logger'
 
 export default async function ClientUpdatesPage() {
@@ -13,11 +12,7 @@ export default async function ClientUpdatesPage() {
     drafts_statuses: drafts.map(d => d.draft.status),
   })
 
-  return (
-    <AppLayout>
-      <ClientUpdatesPageContent drafts={drafts} />
-    </AppLayout>
-  )
+  return <ClientUpdatesPageContent drafts={drafts} />
 }
 
 

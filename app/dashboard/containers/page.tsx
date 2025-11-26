@@ -5,7 +5,6 @@ import { useContainers } from '@/lib/data/useContainers'
 import { updateContainer, deleteContainer, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
 import { useListsContext } from '@/components/providers/ListsProvider'
 import { ListTabs } from '@/components/lists/ListTabs'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
@@ -364,7 +363,15 @@ function EditContainerDialog({
 
 export default function ContainersPage() {
   const { activeListId } = useListsContext()
-  const { containers, loading, error, reload } = useContainers(activeListId)
+  const {
+    containers,
+    loading,
+    isInitialLoading,
+    isRefreshing,
+    isSwitchingList,
+    error,
+    reload,
+  } = useContainers(activeListId)
   
   const [editingContainer, setEditingContainer] = useState<ContainerRecordWithComputed | null>(null)
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now())
@@ -634,48 +641,50 @@ export default function ContainersPage() {
     }
   }, [filteredContainers.length, visibleCount])
 
-  // Don't block rendering if loading flag lags - show data immediately if available
-  if (!containers) {
+  // Only show full-page loading on initial load with no data
+  if (isInitialLoading && containers.length === 0) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-foreground">Containers</h1>
-            <AddContainerTrigger reload={reload} />
-          </div>
-          <LoadingState message="Loading containers..." />
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Containers</h1>
+          <AddContainerTrigger reload={reload} />
         </div>
-      </AppLayout>
+        <LoadingState message="Loading containers..." />
+      </div>
     )
   }
 
   // Show error only if we have no data to display
   if (error && containers.length === 0) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-foreground">Containers</h1>
-            <AddContainerTrigger reload={reload} />
-          </div>
-          <ErrorAlert 
-            message={error.message || "Failed to load containers"}
-            onRetry={reload}
-          />
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Containers</h1>
+          <AddContainerTrigger reload={reload} />
         </div>
-      </AppLayout>
+        <ErrorAlert 
+          message={error.message || "Failed to load containers"}
+          onRetry={reload}
+        />
+      </div>
     )
   }
 
   return (
-    <AppLayout>
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
+    <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
         <header className="flex flex-col gap-1 pt-2">
           <span className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Operations</span>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-xl font-semibold tracking-tight text-[#1F2937]">
-              Container Control Room
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-[#1F2937]">
+                Container Control Room
+              </h1>
+              {isRefreshing && (
+                <span className="text-xs text-muted-foreground">
+                  Refreshing…
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -720,8 +729,6 @@ export default function ContainersPage() {
             owners={uniqueOwners}
             hasActiveFilters={hasActiveFilters}
             addAction={<AddContainerTrigger reload={reload} />}
-            onExport={handleExport}
-            exporting={exporting}
           />
 
           <StatsSummary
@@ -742,47 +749,50 @@ export default function ContainersPage() {
         )}
 
         <div className="flex-1">
-          {loading ? (
-            <motion.div
-              className="flex h-[520px] items-center justify-center rounded-md border border-[#D4D7DE] bg-white shadow-sm"
-              initial={{ opacity: 0.6 }}
-              animate={{ opacity: 1 }}
-            >
-              <span className="text-sm text-slate-500">Loading container board…</span>
-            </motion.div>
-          ) : containers.length === 0 || filteredContainers.length === 0 ? (
-            <EmptyStates
-              loading={loading}
-              hasContainers={containers.length > 0}
-              hasFilteredContainers={filteredContainers.length > 0}
-              hasActiveFilters={hasActiveFilters}
-              onClearFilters={handleClearFilters}
-            />
-          ) : (
-            <motion.div
-              className="flex h-full flex-col overflow-hidden rounded-md border border-[#D4D7DE] bg-white shadow-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.25 }}
-              key={lastUpdated}
-            >
-              <div className="flex-1 overflow-auto">
-                <ContainerTable
-                  containers={visibleContainers}
-                  viewMode={viewMode}
-                  onEdit={handleEditContainer}
-                  onDelete={handleDeleteContainer}
-                  onToggleStatus={handleToggleContainerStatus}
-                  reload={reload}
-                />
-              </div>
-              <div className="border-t border-[#D4D7DE] bg-[#F4F6FA] px-4 py-2 text-xs text-slate-500">
-                {hasMore
-                  ? `Showing ${visibleContainers.length} of ${filteredContainers.length} containers`
-                  : `All ${filteredContainers.length} containers loaded`}
-              </div>
-            </motion.div>
-          )}
+          {/* Board wrapper with consistent min-height for all states */}
+          <div className="flex min-h-[520px] flex-col rounded-md border border-[#D4D7DE] bg-white shadow-sm">
+            {isSwitchingList ? (
+              <motion.div
+                className="flex flex-1 items-center justify-center"
+                initial={{ opacity: 0.6 }}
+                animate={{ opacity: 1 }}
+              >
+                <span className="text-sm text-slate-500">Loading container board…</span>
+              </motion.div>
+            ) : containers.length === 0 || filteredContainers.length === 0 ? (
+              <EmptyStates
+                loading={loading}
+                hasContainers={containers.length > 0}
+                hasFilteredContainers={filteredContainers.length > 0}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={handleClearFilters}
+              />
+            ) : (
+              <motion.div
+                className="flex flex-1 flex-col overflow-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.25 }}
+                key={lastUpdated}
+              >
+                <div className="flex-1 overflow-auto">
+                  <ContainerTable
+                    containers={visibleContainers}
+                    viewMode={viewMode}
+                    onEdit={handleEditContainer}
+                    onDelete={handleDeleteContainer}
+                    onToggleStatus={handleToggleContainerStatus}
+                    reload={reload}
+                  />
+                </div>
+                <div className="border-t border-[#D4D7DE] bg-[#F4F6FA] px-4 py-2 text-xs text-slate-500">
+                  {hasMore
+                    ? `Showing ${visibleContainers.length} of ${filteredContainers.length} containers`
+                    : `All ${filteredContainers.length} containers loaded`}
+                </div>
+              </motion.div>
+            )}
+          </div>
         </div>
 
         <EditContainerDialog
@@ -797,8 +807,7 @@ export default function ContainersPage() {
           onOpenChange={setImportDialogOpen}
           onSuccess={reload}
         />
-      </div>
-    </AppLayout>
+    </div>
   )
 }
 

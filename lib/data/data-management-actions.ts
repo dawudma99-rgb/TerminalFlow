@@ -1,8 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Database } from '@/types/database'
+import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 
 type ContainerInsert = Database['public']['Tables']['containers']['Insert']
 
@@ -10,20 +10,8 @@ type ContainerInsert = Database['public']['Tables']['containers']['Insert']
  * Export all organization data (containers, history, profiles) as JSON.
  */
 export async function exportOrgData() {
-  const supabase = await createClient()
-  
-  // Get the current user's organization_id
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  
-  if (!profile?.organization_id) throw new Error('Organization not found')
-  const orgId = profile.organization_id
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   // Fetch all organization-scoped data
   const [containersResult, historyResult, profilesResult] = await Promise.all([
@@ -62,20 +50,8 @@ export async function exportOrgData() {
  * Only imports containers (history/profiles require manual handling).
  */
 export async function importOrgData(fileContent: string) {
-  const supabase = await createClient()
-  
-  // Get the current user's organization_id
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  
-  if (!profile?.organization_id) throw new Error('Organization not found')
-  const orgId = profile.organization_id
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   let parsed: {
     containers?: Array<Record<string, unknown>>
@@ -119,20 +95,8 @@ export async function importOrgData(fileContent: string) {
  * Requires explicit confirmation in the UI.
  */
 export async function clearOrgData() {
-  const supabase = await createClient()
-  
-  // Get the current user's organization_id
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  
-  if (!profile?.organization_id) throw new Error('Organization not found')
-  const orgId = profile.organization_id
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   // Delete in sequence to avoid constraint issues
   const [containersError, historyError] = await Promise.all([
@@ -152,20 +116,8 @@ export async function clearOrgData() {
  * Inserts 3 sample containers with realistic data.
  */
 export async function seedDemoData() {
-  const supabase = await createClient()
-  
-  // Get the current user's organization_id
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single()
-  
-  if (!profile?.organization_id) throw new Error('Organization not found')
-  const orgId = profile.organization_id
+  const { supabase, organizationId } = await getServerAuthContext()
+  const orgId = organizationId
 
   const now = new Date()
   const demo = [

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -219,31 +218,26 @@ export default function SettingsPage() {
 
   if (loading || settingsLoading) {
     return (
-      <AppLayout>
-        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
-          <div className="flex h-full items-center justify-center">
-            <LoadingState message="Loading settings..." />
-          </div>
-        </main>
-      </AppLayout>
+      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <div className="flex h-full items-center justify-center">
+          <LoadingState message="Loading settings..." />
+        </div>
+      </main>
     )
   }
 
   if (!user || !profile || !settings) {
     return (
-      <AppLayout>
-        <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto max-w-4xl rounded-lg border border-gray-200 bg-white p-6 text-sm text-muted-foreground shadow-sm">
-            Please sign in to view settings.
-          </div>
-        </main>
-      </AppLayout>
+      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <div className="mx-auto max-w-4xl rounded-lg border border-gray-200 bg-white p-6 text-sm text-muted-foreground shadow-sm">
+          Please sign in to view settings.
+        </div>
+      </main>
     )
   }
 
   return (
-    <AppLayout>
-      <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
+    <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -637,7 +631,6 @@ export default function SettingsPage() {
         )}
       </div>
     </main>
-  </AppLayout>
   )
 }
 

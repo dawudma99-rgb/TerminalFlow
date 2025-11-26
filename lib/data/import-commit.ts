@@ -5,20 +5,9 @@ import { revalidatePath } from 'next/cache';
 import { logger } from '@/lib/utils/logger';
 import { ensureMainListForCurrentOrg } from '@/lib/data/lists-actions';
 import type { Database } from '@/types/database';
+import { getServerAuthContext } from '@/lib/auth/serverAuthContext';
 
 type ContainerInsert = Database['public']['Tables']['containers']['Insert'];
-
-async function getOrgId(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', user.id)
-    .single();
-  if (error || !profile?.organization_id) throw new Error('User profile not found');
-  return profile.organization_id;
-}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -46,8 +35,8 @@ export async function commitImport(rows: Array<ImportRow>): Promise<{
   skipped: number;
   errors: Array<{ index: number; message: string }>;
 }> {
-  const supabase = await createClient();
-  const orgId = await getOrgId(supabase);
+  const { supabase, organizationId } = await getServerAuthContext();
+  const orgId = organizationId;
 
   // Ensure Main List exists and get active list ID
   const { activeListId } = await ensureMainListForCurrentOrg();

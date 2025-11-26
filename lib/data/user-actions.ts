@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
+import { getServerAuthContext, getServerOrgContext } from '@/lib/auth/serverAuthContext'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type Organization = Database['public']['Tables']['organizations']['Row']
@@ -10,22 +11,15 @@ type Organization = Database['public']['Tables']['organizations']['Row']
  * Get the current authenticated user's profile with selected fields.
  */
 export async function getCurrentProfile(): Promise<Pick<Profile, 'id' | 'email' | 'organization_id' | 'role' | 'settings'>> {
-  const supabase = await createClient()
+  const { profile } = await getServerAuthContext()
   
-  // Get the current authenticated user
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
-  
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, email, organization_id, role, settings')
-    .eq('id', user.id)
-    .single()
-  
-  if (error) throw new Error(`Failed to load profile: ${error.message}`)
-  if (!data) throw new Error('Profile not found')
-  
-  return data
+  return {
+    id: profile.id,
+    email: profile.email,
+    organization_id: profile.organization_id,
+    role: profile.role,
+    settings: profile.settings,
+  }
 }
 
 /**
@@ -35,11 +29,7 @@ export async function getCurrentProfile(): Promise<Pick<Profile, 'id' | 'email' 
 export async function updateProfile(
   updates: Partial<Pick<Profile, 'email' | 'role' | 'settings' | 'current_list_id'>>
 ): Promise<Profile> {
-  const supabase = await createClient()
-  
-  // Get the current authenticated user
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
+  const { supabase, user } = await getServerAuthContext()
   
   // Add updated_at timestamp
   const updatesWithTimestamp = {
@@ -62,6 +52,8 @@ export async function updateProfile(
 
 /**
  * Get organization details by ID.
+ * @deprecated Use getCurrentOrganization() instead for the current user's organization.
+ * This function is kept for backward compatibility but should be migrated.
  */
 export async function getOrganization(orgId: string): Promise<Pick<Organization, 'id' | 'name' | 'created_at'>> {
   const supabase = await createClient()

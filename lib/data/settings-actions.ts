@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 
 export interface Settings {
   demurrageDailyRate: number
@@ -16,45 +16,23 @@ export interface Settings {
  * Returns defaults if settings don't exist.
  */
 export async function loadSettings(): Promise<Settings> {
-  const supabase = await createClient()
+  const defaults: Settings = {
+    demurrageDailyRate: 80,
+    detentionDailyRate: 50,
+    demFreeDays: 7,
+    detFreeDays: 7,
+    weekendChargeable: true,
+  }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) throw new Error('User not authenticated')
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (error) {
-      // keep production-safe; do not expose internals
-    }
-
-    const defaults: Settings = {
-      demurrageDailyRate: 80,
-      detentionDailyRate: 50,
-      demFreeDays: 7,
-      detFreeDays: 7,
-      weekendChargeable: true,
-    }
-
-    const settings = (data?.settings as Partial<Settings>) || {}
-    const merged = {
+    const { profile } = await getServerAuthContext()
+    const settings = (profile.settings as Partial<Settings>) || {}
+    return {
       ...defaults,
       ...settings,
     }
-
-    return merged
   } catch {
-    return {
-      demurrageDailyRate: 80,
-      detentionDailyRate: 50,
-      demFreeDays: 7,
-      detFreeDays: 7,
-      weekendChargeable: true,
-    }
+    return defaults
   }
 }
 
@@ -63,11 +41,7 @@ export async function loadSettings(): Promise<Settings> {
  * Updates the settings JSONB column.
  */
 export async function saveSettings(settings: Partial<Settings>): Promise<void> {
-  const supabase = await createClient()
-  
-  // Get the current authenticated user
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('User not authenticated')
+  const { supabase, user } = await getServerAuthContext()
   
   // First, get current settings to merge with new ones
   const currentSettings = await loadSettings().catch(() => null)
