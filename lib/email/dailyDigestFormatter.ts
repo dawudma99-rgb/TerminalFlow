@@ -1,6 +1,7 @@
 import type { Database } from '@/types/database'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
 import { getTodayUtcRange } from '@/lib/utils/date-range'
+import { logger } from '@/lib/utils/logger'
 
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
@@ -42,6 +43,20 @@ export function buildDailyDigestForList(params: {
     )
   })
 
+  const overdueCount = overdue.length
+  const warningCount = warning.length
+  const detentionCount = detention.length
+  const closedCount = closedToday.length
+
+  logger.debug('[dailyDigestFormatter] buildDailyDigestForList: Bucket counts', {
+    listName,
+    totalContainers: containers.length,
+    overdueCount,
+    warningCount,
+    detentionCount,
+    closedCount,
+  })
+
   // If all buckets are empty, nothing interesting to say
   if (
     overdue.length === 0 &&
@@ -51,11 +66,6 @@ export function buildDailyDigestForList(params: {
   ) {
     return null
   }
-
-  const warningCount = warning.length
-  const overdueCount = overdue.length
-  const detentionCount = detention.length
-  const closedCount = closedToday.length
 
   // ---- SUBJECT ----
 

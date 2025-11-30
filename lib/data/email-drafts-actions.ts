@@ -549,11 +549,22 @@ export async function createDailyDigestDraftsForToday(): Promise<{
     return { created: 0 }
   }
 
+  logger.info('[email-drafts-actions] createDailyDigestDraftsForToday: Lists fetched', {
+    organization_id: organizationId,
+    list_count: lists.length,
+    lists: lists.map((l) => ({ id: l.id, name: l.name })),
+  })
+
   let createdCount = 0
 
   for (const list of lists) {
     // Safety check
     if (!list.id) continue
+
+    logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Processing list', {
+      list_id: list.id,
+      list_name: list.name,
+    })
 
     // 2) Avoid creating multiple digests for same list+day
     const alreadyExists = await hasDigestDraftForListToday({
@@ -563,7 +574,7 @@ export async function createDailyDigestDraftsForToday(): Promise<{
     })
 
     if (alreadyExists) {
-      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest already exists', {
+      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest already exists, skipping list', {
         list_id: list.id,
         list_name: list.name,
       })
@@ -578,6 +589,20 @@ export async function createDailyDigestDraftsForToday(): Promise<{
         listId: list.id,
       })
 
+      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Containers fetched for list', {
+        list_id: list.id,
+        list_name: list.name,
+        container_count: enriched?.length ?? 0,
+        containers: enriched?.map((e) => ({
+          container_id: e.raw.id,
+          container_no: e.raw.container_no,
+          is_closed: e.raw.is_closed,
+          arrival_date: e.raw.arrival_date,
+          updated_at: e.raw.updated_at,
+          list_id: e.raw.list_id,
+        })) ?? [],
+      })
+
       // If no containers, skip this list
       if (!enriched || enriched.length === 0) {
         logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: No containers for list', {
@@ -589,18 +614,30 @@ export async function createDailyDigestDraftsForToday(): Promise<{
 
       // 4) Build the digest subject/body from container state
       const containers = enriched.map((e) => e.raw)
+      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Calling buildDailyDigestForList', {
+        list_id: list.id,
+        list_name: list.name,
+        container_count: containers.length,
+      })
+
       const digest = buildDailyDigestForList({
         listName: list.name ?? 'Unnamed list',
         containers,
       })
 
       if (!digest) {
-        logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest builder returned null', {
+        logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest builder returned null – no buckets non-empty for this list', {
           list_id: list.id,
           list_name: list.name,
         })
         continue
       }
+
+      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest builder returned non-null for this list', {
+        list_id: list.id,
+        list_name: list.name,
+        subject: digest.subject,
+      })
 
       // 5) Insert a new email_draft row
       const metadata = {
