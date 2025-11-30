@@ -2,17 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
-import {
-  buildClientEmailDraft,
-  type ClientEmailEventType,
-} from '@/lib/email/clientEmailFormatter'
+import { type ClientEmailEventType } from '@/lib/email/clientEmailFormatter'
 import { logger } from '@/lib/utils/logger'
 import { sendAlertEmail } from '@/lib/email/sendAlertEmail'
 import { getServerAuthContext, type ServerAuthContext } from '@/lib/auth/serverAuthContext'
+import { buildDailyDigestForList } from '@/lib/email/dailyDigestFormatter'
+import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
 
 type EmailDraftRow = Database['public']['Tables']['email_drafts']['Row']
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 type EmailDraftStatus = Database['public']['Tables']['email_drafts']['Row']['status']
+type ListRow = Database['public']['Tables']['container_lists']['Row']
 
 interface OrgContext {
   userId: string
@@ -42,214 +42,6 @@ async function resolveOrgContext(): Promise<{
   }
 }
 
-async function fetchContainer(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  containerId: string,
-  organizationId: string,
-): Promise<ContainerRow | null> {
-  const { data, error } = await supabase
-    .from('containers')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .eq('id', containerId)
-    .single()
-
-  if (error) {
-    logger.error('[email-drafts-actions] Failed to fetch container for email draft', {
-      container_id: containerId,
-      organization_id: organizationId,
-      error: error.message,
-    })
-    return null
-  }
-
-  return data
-}
-
-async function findPendingDraft(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  params: {
-    organizationId: string
-    containerId: string
-    eventType: ClientEmailEventType
-  },
-): Promise<EmailDraftRow | null> {
-  const { data, error } = await supabase
-    .from('email_drafts')
-    .select('*')
-    .eq('organization_id', params.organizationId)
-    .eq('container_id', params.containerId)
-    .eq('event_type', params.eventType)
-    .eq('status', 'pending')
-    .maybeSingle()
-
-  if (error) {
-    logger.error('[email-drafts-actions] Failed to check for existing draft', {
-      error: error.message,
-      container_id: params.containerId,
-      organization_id: params.organizationId,
-      event_type: params.eventType,
-    })
-    return null
-  }
-
-  return data ?? null
-}
-
-/**
- * Create (or reuse an existing) pending email draft for a container event.
- *
- * This helper enforces tenant scoping, ensures idempotency per container/event,
- * and stores formatted subject/body/metadata for later approval.
- *
- * @param params.containerId - The container ID
- * @param params.eventType - The event type (lfd_warning, became_overdue, etc.)
- * @param params.generatedByUserId - Optional user ID who triggered this (for audit)
- * @param params.organizationId - Optional organization ID (if already known, avoids re-resolution)
- * @param params.supabase - Optional Supabase client (if already available)
- */
-export async function createEmailDraftForContainerEvent(params: {
-  containerId: string
-  eventType: ClientEmailEventType
-  generatedByUserId?: string
-  organizationId?: string
-  supabase?: Awaited<ReturnType<typeof createClient>>
-}): Promise<EmailDraftRow | null> {
-  logger.debug('[email-drafts-actions] Starting createEmailDraftForContainerEvent', {
-    container_id: params.containerId,
-    event_type: params.eventType,
-    generated_by_user_id: params.generatedByUserId,
-    organization_id_provided: !!params.organizationId,
-  })
-
-  // Use provided supabase client or create a new one
-  let supabase: Awaited<ReturnType<typeof createClient>>
-  let organizationId: string
-  let userId: string | null = null
-
-  if (params.supabase && params.organizationId) {
-    // Use provided context
-    supabase = params.supabase
-    organizationId = params.organizationId
-    // Try to get user ID if available
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      userId = user?.id ?? null
-    } catch {
-      // Ignore - userId will be null
-    }
-  } else {
-    // Resolve context from auth
-    const { supabase: resolvedSupabase, context } = await resolveOrgContext()
-    supabase = resolvedSupabase
-
-    if (!context) {
-      logger.warn('[email-drafts-actions] No org context resolved - cannot create draft', {
-        container_id: params.containerId,
-        event_type: params.eventType,
-      })
-      return null
-    }
-
-    organizationId = context.organizationId
-    userId = context.userId
-  }
-
-  logger.debug('[email-drafts-actions] Using organization context', {
-    organization_id: organizationId,
-    user_id: userId,
-    container_id: params.containerId,
-    event_type: params.eventType,
-  })
-
-  const container = await fetchContainer(supabase, params.containerId, organizationId)
-  if (!container) {
-    logger.warn('[email-drafts-actions] Container not found - cannot create draft', {
-      container_id: params.containerId,
-      organization_id: organizationId,
-      event_type: params.eventType,
-    })
-    return null
-  }
-
-  logger.debug('[email-drafts-actions] Container fetched', {
-    container_id: container.id,
-    container_no: container.container_no,
-    organization_id: organizationId,
-  })
-
-  const existingDraft = await findPendingDraft(supabase, {
-    organizationId,
-    containerId: container.id,
-    eventType: params.eventType,
-  })
-
-  if (existingDraft) {
-    logger.debug('[email-drafts-actions] Existing pending draft found - returning it', {
-      draft_id: existingDraft.id,
-      container_id: container.id,
-      event_type: params.eventType,
-    })
-    return existingDraft
-  }
-
-  const draftContent = buildClientEmailDraft({
-    container,
-    eventType: params.eventType,
-  })
-
-  const insertPayload = {
-    organization_id: organizationId,
-    container_id: container.id,
-    event_type: params.eventType,
-    status: 'pending' as const,
-    to_email: null,
-    subject: draftContent.subject,
-    body_text: draftContent.bodyText,
-    metadata: draftContent.metadata,
-    created_by_user_id: params.generatedByUserId ?? userId,
-    approved_by_user_id: null,
-    last_error: null,
-  }
-
-  logger.debug('[email-drafts-actions] Inserting email draft', {
-    organization_id: insertPayload.organization_id,
-    container_id: insertPayload.container_id,
-    event_type: insertPayload.event_type,
-    subject: insertPayload.subject.substring(0, 50),
-    created_by_user_id: insertPayload.created_by_user_id,
-  })
-
-  const { data, error } = await supabase
-    .from('email_drafts')
-    .insert(insertPayload)
-    .select('*')
-    .single()
-
-  if (error) {
-    logger.error('[email-drafts-actions] Failed to insert email draft', {
-      error: error.message,
-      error_code: error.code,
-      error_details: error.details,
-      error_hint: error.hint,
-      organization_id: organizationId,
-      container_id: container.id,
-      event_type: params.eventType,
-      insert_payload: insertPayload,
-    })
-    return null
-  }
-
-  logger.info('[email-drafts-actions] Successfully created email draft', {
-    draft_id: data.id,
-    container_id: container.id,
-    event_type: params.eventType,
-    organization_id: organizationId,
-  })
-
-  return data
-}
-
 export interface EmailDraftWithContainer {
   draft: EmailDraftRow
   container: ContainerRow | null
@@ -275,6 +67,7 @@ export async function fetchPendingEmailDraftsForCurrentOrg(): Promise<EmailDraft
     .select('*')
     .eq('organization_id', context.organizationId)
     .eq('status', PENDING_STATUS)
+    .eq('event_type', 'daily_digest')
     .order('generated_at', { ascending: false })
     .limit(200)
 
@@ -615,5 +408,258 @@ export async function sendClientEmailForDraft(params: {
 }
 
 export type { ClientEmailEventType } from '@/lib/email/clientEmailFormatter'
+
+// --- Daily Digest Helpers ---
+
+/**
+ * Fetch all container lists for the current organization.
+ * Returns lists ordered by creation date (oldest first).
+ */
+async function fetchListsForOrg(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string
+): Promise<ListRow[]> {
+  const { data, error } = await supabase
+    .from('container_lists')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    logger.error('[email-drafts-actions] fetchListsForOrg error', {
+      organization_id: organizationId,
+      error: error.message,
+    })
+    return []
+  }
+
+  return data ?? []
+}
+
+/**
+ * Fetch containers for a list with derived fields computed.
+ * Returns containers enriched with computed status, fees, etc.
+ */
+async function fetchContainersForListWithDerived(params: {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  organizationId: string
+  listId: string
+}): Promise<Array<{ raw: ContainerRow; derived: ContainerWithDerivedFields }>> {
+  const { supabase, organizationId, listId } = params
+
+  const { data, error } = await supabase
+    .from('containers')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('list_id', listId)
+
+  if (error) {
+    logger.error('[email-drafts-actions] fetchContainersForListWithDerived error', {
+      organization_id: organizationId,
+      list_id: listId,
+      error: error.message,
+    })
+    return []
+  }
+
+  if (!data || data.length === 0) {
+    return []
+  }
+
+  // Compute derived fields for each container
+  const enriched = data.map((c) => ({
+    raw: c,
+    derived: computeDerivedFields(c),
+  }))
+
+  return enriched
+}
+
+/**
+ * Check if a digest draft for a given list already exists today.
+ * Uses UTC date range to determine "today".
+ */
+async function hasDigestDraftForListToday(params: {
+  supabase: Awaited<ReturnType<typeof createClient>>
+  organizationId: string
+  listId: string
+}): Promise<boolean> {
+  const { supabase, organizationId, listId } = params
+
+  // We treat "today" in UTC
+  const today = new Date()
+  const isoDate = today.toISOString().split('T')[0] // "YYYY-MM-DD"
+
+  // Query for existing digest draft using metadata->>list_id JSON path
+  // We use a filter to check the JSONB field directly
+  const { data, error } = await supabase
+    .from('email_drafts')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('event_type', 'daily_digest')
+    .gte('generated_at', `${isoDate}T00:00:00.000Z`)
+    .lte('generated_at', `${isoDate}T23:59:59.999Z`)
+    .filter('metadata->>list_id', 'eq', listId)
+    .limit(1)
+
+  if (error) {
+    logger.error('[email-drafts-actions] hasDigestDraftForListToday error', {
+      list_id: listId,
+      organization_id: organizationId,
+      error: error.message,
+    })
+    return false
+  }
+
+  return (data?.length ?? 0) > 0
+}
+
+/**
+ * Create daily digest email drafts for all lists in the current organization.
+ * 
+ * For each list:
+ * - Fetches containers for that list and computes derived fields
+ * - Builds digest content using buildDailyDigestForList (container-state-based)
+ * - Creates an email_draft row with event_type = 'daily_digest'
+ * - Skips lists with no containers in relevant states or if a digest already exists today
+ * 
+ * @returns { created: number } - Number of digest drafts created
+ */
+export async function createDailyDigestDraftsForToday(): Promise<{
+  created: number
+}> {
+  let context: ServerAuthContext
+
+  try {
+    context = await getServerAuthContext()
+  } catch {
+    logger.warn('[email-drafts-actions] createDailyDigestDraftsForToday: No auth context')
+    return { created: 0 }
+  }
+
+  const { supabase, organizationId, user } = context
+  const userId = user?.id ?? null
+
+  // 1) Get all lists for this org
+  const lists = await fetchListsForOrg(supabase, organizationId)
+  if (!lists.length) {
+    logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: No lists found', {
+      organization_id: organizationId,
+    })
+    return { created: 0 }
+  }
+
+  let createdCount = 0
+
+  for (const list of lists) {
+    // Safety check
+    if (!list.id) continue
+
+    // 2) Avoid creating multiple digests for same list+day
+    const alreadyExists = await hasDigestDraftForListToday({
+      supabase,
+      organizationId,
+      listId: list.id,
+    })
+
+    if (alreadyExists) {
+      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest already exists', {
+        list_id: list.id,
+        list_name: list.name,
+      })
+      continue
+    }
+
+    // 3) Fetch containers for this list with derived fields
+    try {
+      const enriched = await fetchContainersForListWithDerived({
+        supabase,
+        organizationId,
+        listId: list.id,
+      })
+
+      // If no containers, skip this list
+      if (!enriched || enriched.length === 0) {
+        logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: No containers for list', {
+          list_id: list.id,
+          list_name: list.name,
+        })
+        continue
+      }
+
+      // 4) Build the digest subject/body from container state
+      const containers = enriched.map((e) => e.raw)
+      const digest = buildDailyDigestForList({
+        listName: list.name ?? 'Unnamed list',
+        containers,
+      })
+
+      if (!digest) {
+        logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest builder returned null', {
+          list_id: list.id,
+          list_name: list.name,
+        })
+        continue
+      }
+
+      // 5) Insert a new email_draft row
+      const metadata = {
+        list_id: list.id,
+        list_name: list.name,
+        generated_from: 'daily_digest',
+      }
+
+      // Type assertion needed: container_id is nullable in DB but types haven't been regenerated
+      const { error } = await supabase.from('email_drafts').insert({
+        organization_id: organizationId,
+        container_id: null as any, // this is a list-level digest (nullable in DB)
+        event_type: 'daily_digest',
+        status: 'pending',
+        to_email: null, // forwarder will fill this in
+        subject: digest.subject,
+        body_text: digest.bodyText,
+        metadata,
+        created_by_user_id: userId,
+        approved_by_user_id: null,
+        last_error: null,
+      } as any)
+
+      if (error) {
+        logger.error('[email-drafts-actions] createDailyDigestDraftsForToday insert error', {
+          list_id: list.id,
+          list_name: list.name,
+          organization_id: organizationId,
+          error: error.message,
+        })
+        continue
+      }
+
+      logger.info('[email-drafts-actions] createDailyDigestDraftsForToday: Created digest draft', {
+        list_id: list.id,
+        list_name: list.name,
+        organization_id: organizationId,
+        container_count: containers.length,
+      })
+
+      createdCount += 1
+    } catch (error) {
+      logger.error('[email-drafts-actions] createDailyDigestDraftsForToday: Error processing list', {
+        list_id: list.id,
+        list_name: list.name,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      // Continue with next list
+      continue
+    }
+  }
+
+  logger.info('[email-drafts-actions] createDailyDigestDraftsForToday: Completed', {
+    organization_id: organizationId,
+    total_lists: lists.length,
+    created_count: createdCount,
+  })
+
+  return { created: createdCount }
+}
 
 

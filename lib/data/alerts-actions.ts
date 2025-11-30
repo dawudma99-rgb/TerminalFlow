@@ -4,11 +4,11 @@ import type { Database } from '@/types/database'
 import { logger } from '@/lib/utils/logger'
 import { revalidatePath } from 'next/cache'
 import { getServerAuthContext, type ServerAuthContext } from '@/lib/auth/serverAuthContext'
+import { getTodayUtcRange } from '@/lib/utils/date-range'
 
 export type AlertRow = Database['public']['Tables']['alerts']['Row'] & {
   container_no?: string | null
   list_name?: string | null
-  seen_at?: string | null
 }
 
 // --- Read ---
@@ -181,6 +181,46 @@ export async function fetchAlertsPage(params: {
   const hasMore = count !== null ? from + alerts.length < count : false
 
   return { alerts, hasMore }
+}
+
+// --- Today's Alerts for List ---
+/**
+ * Fetch alerts created today (UTC) for a specific list.
+ * Returns raw alerts for the given list within the current UTC day.
+ * 
+ * @param listId - The container list ID to filter alerts by
+ * @returns Array of alert rows created today for the specified list
+ */
+export async function fetchAlertsForListToday(
+  listId: string
+): Promise<Database['public']['Tables']['alerts']['Row'][]> {
+  let context: ServerAuthContext
+
+  try {
+    context = await getServerAuthContext()
+  } catch {
+    // If not authenticated, return empty array (graceful failure)
+    return []
+  }
+
+  const { supabase, organizationId } = context
+  const { start, end } = getTodayUtcRange()
+
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('list_id', listId)
+    .gte('created_at', start.toISOString())
+    .lte('created_at', end.toISOString())
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    logger.error('fetchAlertsForListToday error', { listId, error: error.message })
+    throw new Error(`Supabase fetchAlertsForListToday error: ${error.message}`)
+  }
+
+  return data ?? []
 }
 
 // --- Update ---

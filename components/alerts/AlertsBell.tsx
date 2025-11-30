@@ -115,8 +115,8 @@ export function AlertsBell() {
     }
   }, [latestAlert, resetLatest])
 
-  // Filter alerts that haven't been seen (seen_at is null or undefined)
-  const unreadAlerts = alerts.filter((alert) => !alert.seen_at)
+  // Filter alerts that haven't been seen (seen_at is null)
+  const unreadAlerts = alerts.filter((alert) => alert.seen_at == null)
   const unreadCount = unreadAlerts.length
   const displayCount = unreadCount > 9 ? '9+' : unreadCount.toString()
 
@@ -134,7 +134,9 @@ export function AlertsBell() {
     setOpen(isOpen)
     if (isOpen && unreadCount > 0) {
       // Mark all unread alerts as seen (fire-and-forget)
-      const unreadIds = unreadAlerts.map((a) => a.id)
+      const unreadIds = alerts
+        .filter((a) => a.seen_at == null)
+        .map((a) => a.id)
       const seenAtTimestamp = new Date().toISOString()
       
       // Optimistically update local state immediately for instant UI feedback
@@ -202,7 +204,7 @@ export function AlertsBell() {
             <ScrollArea className="h-[300px]">
               <div className="space-y-1 p-1">
                 {alerts.map((alert) => {
-                  const isUnread = !alert.seen_at
+                  const isUnread = alert.seen_at == null
                   const isHighlighted = highlightedAlertId === alert.id
                   return (
                     <DropdownMenuItem

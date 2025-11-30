@@ -27,6 +27,7 @@ export type Database = {
           metadata: Json | null
           created_by_user_id: string | null
           created_at: string
+          seen_at: string | null
         }
         Insert: {
           id?: string
@@ -40,6 +41,7 @@ export type Database = {
           metadata?: Json | null
           created_by_user_id?: string | null
           created_at?: string
+          seen_at?: string | null
         }
         Update: {
           id?: string
@@ -53,6 +55,7 @@ export type Database = {
           metadata?: Json | null
           created_by_user_id?: string | null
           created_at?: string
+          seen_at?: string | null
         }
         Relationships: [
           {

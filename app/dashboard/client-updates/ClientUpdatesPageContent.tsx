@@ -9,6 +9,7 @@ import {
   updateEmailDraftContent,
   approveEmailDraft,
   sendClientEmailForDraft,
+  createDailyDigestDraftsForToday,
   type EmailDraftWithContainer,
   type ClientEmailEventType,
 } from '@/lib/data/email-drafts-actions'
@@ -37,14 +38,13 @@ import { KpiCard } from '@/components/ui/KpiCard'
 
 type DraftMetadata = {
   port?: string | null
+  list_id?: string | null
+  list_name?: string | null
+  generated_from?: string | null
 }
 
 const EVENT_LABELS: Record<ClientEmailEventType, string> = {
-  lfd_warning: 'Warning – free time running low',
-  became_overdue: 'Overdue – demurrage started',
-  detention_started: 'Detention now accruing',
-  gate_out: 'Gate out confirmed',
-  returned_empty: 'Empty returned',
+  daily_digest: 'Daily digest',
 }
 
 function formatDateTime(value?: string | null): string {
@@ -71,6 +71,7 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSaving, startSaving] = useTransition()
   const [isApproving, startApproving] = useTransition()
+  const [isGenerating, startGenerating] = useTransition()
   const [sendingDraftId, setSendingDraftId] = useState<string | null>(null)
 
   // Form state for edit dialog
@@ -154,6 +155,25 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
     }
   }
 
+  const handleGenerateDailyDigests = () => {
+    startGenerating(async () => {
+      try {
+        const result = await createDailyDigestDraftsForToday()
+
+        if (result?.created > 0) {
+          toast.success(`Created ${result.created} daily digest draft(s).`)
+        } else {
+          toast.info('No alerts today – no digests created.')
+        }
+
+        router.refresh()
+      } catch (err) {
+        console.error('Failed to generate daily digests', err)
+        toast.error('Failed to generate daily digests. Please try again.')
+      }
+    })
+  }
+
   const pendingCount = drafts.length
   const approvedCount = drafts.filter((d) => d.draft.approved_by_user_id !== null).length
   const readyToSendCount = drafts.filter(
@@ -168,10 +188,17 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
         </span>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold tracking-tight text-[#1F2937]">Client Updates</h1>
+          <Button
+            variant="outline"
+            onClick={handleGenerateDailyDigests}
+            disabled={isGenerating}
+            className="border-[#D4D7DE] text-slate-600 hover:bg-[#EEF1F6]"
+          >
+            {isGenerating ? 'Generating digests...' : 'Generate daily digests'}
+          </Button>
         </div>
         <p className="text-sm text-[#6B7280] mt-1">
-          Review and edit draft emails generated from container events. Mark drafts as ready when
-          you&apos;re satisfied with the content.
+          Review and send daily digest emails to your clients. Generate digests to see today&apos;s alerts grouped by client list.
         </p>
       </header>
 
@@ -197,8 +224,8 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
         <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
           <CardContent className="pt-6">
             <EmptyState
-              title="No client updates pending"
-              description="When containers change status, draft emails for your clients will appear here for review."
+              title="No daily digests pending"
+              description="Click &quot;Generate daily digests&quot; to create digest emails for lists with alerts today."
               icon={<Mail className="h-12 w-12 text-muted-foreground" />}
             />
           </CardContent>
@@ -215,10 +242,9 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Generated</TableHead>
-                  <TableHead>Container</TableHead>
-                  <TableHead>Port</TableHead>
-                  <TableHead>Event</TableHead>
+                  <TableHead>Client List</TableHead>
+                  <TableHead>Digest Date</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Subject</TableHead>
                   <TableHead>To</TableHead>
                   <TableHead>Status</TableHead>
@@ -228,9 +254,7 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
               <TableBody>
                 {drafts.map(({ draft, container }) => {
                   const metadata = (draft.metadata as DraftMetadata | null) ?? null
-                  const eventLabel =
-                    EVENT_LABELS[(draft.event_type as ClientEmailEventType) ?? 'lfd_warning'] ??
-                    draft.event_type
+                  const listName = metadata?.list_name ?? metadata?.list_id ?? null
                   const isApproved = draft.approved_by_user_id !== null
                   const hasRecipientEmail = draft.to_email?.trim() !== '' && draft.to_email !== null
                   const canSend = isApproved && hasRecipientEmail
@@ -238,19 +262,20 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
 
                   return (
                     <TableRow key={draft.id} className="hover:bg-[#F9FAFB] transition-colors">
-                      <TableCell className="whitespace-nowrap text-sm text-[#6B7280]">
-                        {formatDateTime(draft.generated_at)}
+                      <TableCell className="text-sm text-[#1F2937]">
+                        {listName ? (
+                          <span className="font-medium">{listName}</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-[#1F2937]">
-                        {container?.container_no ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-sm text-[#6B7280]">
-                        {getPortLabel(metadata, container?.port)}
+                      <TableCell className="text-sm text-[#6B7280] whitespace-nowrap">
+                        {formatDateTime(draft.generated_at).split(',')[0]}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="text-xs">
-                          {eventLabel}
-                        </Badge>
+                        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                          Daily digest
+                        </span>
                       </TableCell>
                       <TableCell className="max-w-sm">
                         <div className="font-medium text-[#1F2937]">{draft.subject}</div>
@@ -343,16 +368,20 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
           {selectedDraft && (
             <div className="space-y-4">
               <div className="rounded-md bg-slate-50 border border-slate-200 p-3">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="font-medium">Container:</span>
-                  <span className="font-mono text-xs">
-                    {selectedDraft.container?.container_no ?? '—'}
-                  </span>
-                  {selectedDraft.container?.port && (
-                    <>
-                      <span className="text-slate-400">•</span>
-                      <span>{selectedDraft.container.port}</span>
-                    </>
+                <div className="flex flex-col gap-1 text-sm text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Type:</span>
+                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                      Daily digest
+                    </span>
+                  </div>
+                  {(selectedDraft.draft.metadata as DraftMetadata)?.list_name && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">List:</span>
+                      <span className="font-medium">
+                        {(selectedDraft.draft.metadata as DraftMetadata).list_name}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

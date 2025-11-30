@@ -118,7 +118,7 @@ export async function insertContainer(
   container: Omit<ContainerInsertWithPolPod, 'organization_id' | 'list_id'>,
   listId?: string | null
 ) {
-  const { supabase, organizationId } = await getServerAuthContext()
+  const { supabase, organizationId, user } = await getServerAuthContext()
 
   // If no listId provided, ensure Main List exists and get active list
   let finalListId = listId
@@ -172,6 +172,25 @@ export async function insertContainer(
     const hint = error.hint ? ` Hint: ${error.hint}` : ''
     throw new Error(`Supabase insertContainer error: ${error.message}.${details}${hint}`)
   }
+
+  // Create alerts for state changes (after successful insert)
+  if (data) {
+    try {
+      await createAlertsForContainerChange({
+        supabase,
+        previousContainer: null,
+        newContainer: data,
+        currentUserId: user.id,
+      })
+    } catch (alertError) {
+      // Log but don't throw - we don't want to break the main insert if alerts fail
+      logger.error('insertContainer failed to create alerts', {
+        container_id: data.id,
+        alertError: alertError instanceof Error ? alertError.message : String(alertError),
+      })
+    }
+  }
+
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/containers')
   return data

@@ -9,8 +9,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
 import { logger } from '@/lib/utils/logger'
-import { sendAlertEmail } from '@/lib/email/sendAlertEmail'
-import { createEmailDraftForContainerEvent } from '@/lib/data/email-drafts-actions'
 
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
@@ -72,20 +70,8 @@ export async function createAlertsForContainerChange(params: {
       created_by_user_id: currentUserId ?? null,
     })
 
-    // Prepare client-facing draft (fire-and-forget but catch errors)
-    // Pass the supabase client and organization_id we already have
-    createEmailDraftForContainerEvent({
-      containerId: newContainer.id,
-      eventType: 'lfd_warning',
-      generatedByUserId: currentUserId,
-      organizationId: newContainer.organization_id,
-      supabase,
-    }).catch((err) => {
-      logger.error('[createAlertsForContainerChange] Failed to create email draft for lfd_warning', {
-        container_id: newContainer.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
+    // Note: Email drafts are no longer auto-created for individual container events.
+    // Daily digests are generated separately via createDailyDigestDraftsForToday().
   }
 
   // 2) Became OVERDUE (cost started - demurrage begins when overdue)
@@ -115,20 +101,8 @@ export async function createAlertsForContainerChange(params: {
       created_by_user_id: currentUserId ?? null,
     })
 
-    // Prepare client-facing draft (fire-and-forget but catch errors)
-    // Pass the supabase client and organization_id we already have
-    createEmailDraftForContainerEvent({
-      containerId: newContainer.id,
-      eventType: 'became_overdue',
-      generatedByUserId: currentUserId,
-      organizationId: newContainer.organization_id,
-      supabase,
-    }).catch((err) => {
-      logger.error('[createAlertsForContainerChange] Failed to create email draft for became_overdue', {
-        container_id: newContainer.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
+    // Note: Email drafts are no longer auto-created for individual container events.
+    // Daily digests are generated separately via createDailyDigestDraftsForToday().
   }
 
   // 3) Detention started
@@ -162,20 +136,8 @@ export async function createAlertsForContainerChange(params: {
       created_by_user_id: currentUserId ?? null,
     })
 
-    // Prepare client-facing draft (fire-and-forget but catch errors)
-    // Pass the supabase client and organization_id we already have
-    createEmailDraftForContainerEvent({
-      containerId: newContainer.id,
-      eventType: 'detention_started',
-      generatedByUserId: currentUserId,
-      organizationId: newContainer.organization_id,
-      supabase,
-    }).catch((err) => {
-      logger.error('[createAlertsForContainerChange] Failed to create email draft for detention_started', {
-        container_id: newContainer.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
+    // Note: Email drafts are no longer auto-created for individual container events.
+    // Daily digests are generated separately via createDailyDigestDraftsForToday().
   }
 
   // 5) Container closed

@@ -34,7 +34,7 @@
 - **Fee Calculation**: Automatic calculation of demurrage and detention fees using tiered or flat rates
 - **Multi-List Organization**: Organize containers into multiple lists (similar to Excel tabs)
 - **Real-time Alerts**: Automated alerts for overdue containers, demurrage/detention events
-- **Email Notifications**: Critical alerts sent via email to all organization users
+- **Daily Digest Emails**: Manual generation of daily digest drafts grouped by client list, with approval workflow before sending
 - **CSV/Excel Import**: Bulk import containers from spreadsheets
 - **Analytics Dashboard**: Cost analysis, port performance, and risk assessment
 - **Activity History**: Complete audit trail of container changes
@@ -218,16 +218,16 @@
 - `organization_id` (UUID, FK → organizations)
 - `container_id` (UUID, FK → containers)
 - `list_id` (UUID, FK → container_lists, nullable)
-- `event_type` (TEXT) - "became_warning", "became_overdue", "demurrage_started", "detention_started", "container_closed"
+- `event_type` (TEXT) - "became_warning", "became_overdue", "detention_started", "container_closed"
 - `severity` (TEXT) - "info", "warning", "critical"
 - `title` (TEXT)
 - `message` (TEXT, nullable)
-- `metadata` (JSONB, nullable) - Additional context
+- `metadata` (JSONB, nullable) - Additional context (container_no, port, days_left, etc.)
 - `created_by_user_id` (UUID, FK → profiles, nullable)
 - `created_at` (TIMESTAMP)
 - `seen_at` (TIMESTAMP, nullable)
 
-**Purpose:** Internal alert system. Created automatically when container state changes. Emails sent for critical events.
+**Purpose:** Internal alert system. Created automatically when container state changes. Used for dashboard display, daily digest generation, and analytics. **Note:** Alerts do NOT automatically create email drafts or send emails.
 
 ---
 
@@ -256,6 +256,27 @@
 
 ---
 
+#### `email_drafts`
+- `id` (UUID, PK)
+- `organization_id` (UUID, FK → organizations)
+- `container_id` (UUID, FK → containers, nullable) - NULL for daily digest drafts
+- `event_type` (TEXT) - Currently only `'daily_digest'` (legacy per-container types removed)
+- `status` (TEXT) - `'pending'`, `'sent'`, or `'skipped'`
+- `to_email` (TEXT, nullable) - Recipient email (user-entered)
+- `subject` (TEXT) - Email subject line
+- `body_text` (TEXT) - Email body content
+- `metadata` (JSONB, nullable) - Contains `list_id`, `list_name` for digest drafts
+- `generated_at` (TIMESTAMP) - When draft was created
+- `sent_at` (TIMESTAMP, nullable) - When email was sent
+- `skipped_at` (TIMESTAMP, nullable) - When draft was skipped/rejected
+- `created_by_user_id` (UUID, FK → profiles, nullable)
+- `approved_by_user_id` (UUID, FK → profiles, nullable) - Required before sending
+- `last_error` (TEXT, nullable) - Last send error message
+
+**Purpose:** Email draft queue for client emails. All client emails go through a draft → approval → send workflow. Daily digest drafts are created manually and grouped by list.
+
+---
+
 ### Relationships
 
 ```
@@ -265,12 +286,16 @@ organizations (1) ──< (many) containers
 organizations (1) ──< (many) alerts
 organizations (1) ──< (many) container_history
 organizations (1) ──< (many) carrier_defaults
+organizations (1) ──< (many) email_drafts
 
 container_lists (1) ──< (many) containers
+container_lists (1) ──< (many) alerts (via list_id)
 containers (1) ──< (many) alerts
 containers (1) ──< (many) container_history
+containers (1) ──< (many) email_drafts (nullable - NULL for digest drafts)
 
 profiles (1) ──< (many) alerts (created_by_user_id)
+profiles (1) ──< (many) email_drafts (created_by_user_id, approved_by_user_id)
 profiles (1) ──> (1) container_lists (current_list_id)
 ```
 
@@ -549,40 +574,88 @@ USING (
 
 ---
 
-### 6. Email Notifications
+### 6. Email Notifications & Daily Digest System
 
-**File:** `lib/email/sendAlertEmail.ts` + `lib/data/alerts-logic.ts`
+**Files:** 
+- `lib/email/sendAlertEmail.ts` - Email sending via Resend
+- `lib/data/email-drafts-actions.ts` - Draft management and sending
+- `lib/email/dailyDigestFormatter.ts` - Daily digest content generation
+- `lib/data/alerts-logic.ts` - Alert creation (no longer creates email drafts)
 
-**Email Helper:** `sendAlertEmail()`
-- Uses Resend SDK
+**Email Service:** `sendAlertEmail()`
+- Uses Resend SDK (v6.5.0)
 - FROM: `process.env.EMAIL_FROM` or `alerts@terminalflow.app`
 - Format: "TerminalFlow Alerts <email>"
 - Plain text emails (mobile-friendly)
+- Returns: `{ success: boolean, error?: string }`
 
-**When Emails Are Sent:**
-- Only for 3 critical alert types:
-  - `became_overdue`
-  - `demurrage_started`
-  - `detention_started`
-- NOT sent for: `became_warning`, `container_closed`
+**Email Draft System:**
 
-**Recipients:**
-- All users in the same organization
-- Only users with non-null email addresses
-- Fetched from `profiles` table
+The app uses a **draft-based approval workflow** for all client emails:
 
-**Email Content:**
-- Subject: Based on alert type (e.g., "Container is now overdue – {containerNo}")
-- Body: Plain text with container info and link
-- Link: `https://terminalflow.app/dashboard/alerts`
+1. **Draft Creation:** Daily digest drafts are created manually via "Generate daily digests" button
+2. **Draft Storage:** All drafts stored in `email_drafts` table with `status = 'pending'`
+3. **User Review:** Forwarders review, edit subject/body, and enter recipient email
+4. **Approval:** Forwarders mark drafts as ready (`approved_by_user_id` set)
+5. **Sending:** Forwarders send approved drafts via "Send now" button
 
-**Process:**
-1. Alert created in `createAlertsForContainerChange()`
-2. Filters alerts to email-worthy events
-3. Fetches all organization users' emails
-4. Builds email subject and body
-5. Sends to all recipients (non-blocking)
-6. Logs failures but doesn't break container update
+**Daily Digest System:**
+
+**How It Works:**
+- **Manual Trigger:** User clicks "Generate daily digests" button on `/dashboard/client-updates`
+- **Function:** `createDailyDigestDraftsForToday()` in `lib/data/email-drafts-actions.ts`
+- **Process:**
+  1. Fetches all lists for current organization
+  2. For each list, fetches today's alerts using `fetchAlertsForListToday()`
+  3. Groups alerts by event type (became_warning, became_overdue, detention_started, container_closed)
+  4. Builds digest content via `buildDailyDigestForList()` formatter
+  5. Creates one `email_drafts` row per list with:
+     - `event_type = 'daily_digest'`
+     - `container_id = null` (list-level, not container-specific)
+     - `status = 'pending'`
+     - `to_email = null` (user must enter)
+     - `metadata` contains `list_id` and `list_name`
+  6. Skips lists with no alerts or if digest already exists today
+
+**Draft Fields:**
+- `organization_id` - Tenant isolation
+- `container_id` - NULL for digest drafts (list-level)
+- `event_type` - `'daily_digest'` (only active event type)
+- `status` - `'pending'`, `'sent'`, or `'skipped'`
+- `to_email` - Recipient email (user-entered)
+- `subject` - Auto-generated digest subject
+- `body_text` - Auto-generated digest body
+- `metadata` - JSONB with list info and alert summary
+- `approved_by_user_id` - User who approved (required before sending)
+
+**Sending Process:**
+1. User edits draft (enters `to_email`, can modify subject/body)
+2. User approves draft (sets `approved_by_user_id`)
+3. User clicks "Send now" → calls `sendClientEmailForDraft()`
+4. Validates: draft is pending, approved, and has recipient email
+5. Calls `sendAlertEmail()` via Resend
+6. On success: Updates `status = 'sent'`, sets `sent_at`
+7. On failure: Updates `last_error`, keeps status as 'pending' for retry
+
+**Alert Creation (No Email Drafts):**
+
+**File:** `lib/data/alerts-logic.ts` - `createAlertsForContainerChange()`
+
+**Alert Types Created:**
+- `became_warning` - Free time running low (severity: 'warning')
+- `became_overdue` - Demurrage started (severity: 'critical')
+- `detention_started` - Detention accruing (severity: 'critical')
+- `container_closed` - Container completed (severity: 'info')
+
+**Important:** Alerts are **still created** for all event types, but **NO email drafts are automatically created**. Alerts are used for:
+- UI dashboard display
+- Daily digest generation
+- Analytics and reporting
+
+**Legacy System Removed:**
+- The previous per-container email draft system has been removed
+- No automatic draft creation on container state changes
+- All client emails now go through the daily digest system
 
 ---
 
@@ -975,6 +1048,8 @@ dnd-copilot-next/
 │   │   │   └── export/route.ts
 │   │   ├── alerts/page.tsx       # Alerts page
 │   │   ├── analytics/page.tsx    # Analytics dashboard
+│   │   ├── client-updates/        # Email draft management
+│   │   │   └── page.tsx          # Client Updates page
 │   │   ├── history/page.tsx      # Activity log
 │   │   └── settings/page.tsx     # Settings
 │   ├── login/page.tsx            # Login page
@@ -1002,11 +1077,14 @@ dnd-copilot-next/
 │   │   ├── alerts-actions.ts    # Alert CRUD
 │   │   ├── alerts-logic.ts      # Alert creation logic
 │   │   ├── containers-actions.ts # Container CRUD
+│   │   ├── email-drafts-actions.ts # Email draft management
 │   │   ├── lists-actions.ts      # List CRUD
 │   │   ├── import-commit.ts     # CSV import
 │   │   ├── useContainers.ts     # Container hook
 │   │   └── useLists.ts          # Lists hook
-│   ├── email/                    # Email sending
+│   ├── email/                    # Email sending & formatting
+│   │   ├── clientEmailFormatter.ts # Email event types
+│   │   ├── dailyDigestFormatter.ts # Daily digest content builder
 │   │   └── sendAlertEmail.ts    # Resend helper
 │   ├── hooks/                    # Custom hooks
 │   │   └── useRealtimeAlerts.ts # Real-time alert subscription
@@ -1017,6 +1095,7 @@ dnd-copilot-next/
 │   │   └── middleware.ts        # Middleware client
 │   ├── utils/                    # Utility functions
 │   │   ├── containers.ts        # Derived fields computation
+│   │   ├── date-range.ts        # UTC date range helpers
 │   │   ├── milestones.ts        # Milestone resolution
 │   │   └── logger.ts            # Logging utility
 │   └── tierUtils.ts             # Tiered fee calculations

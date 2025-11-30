@@ -24,9 +24,6 @@ function formatAlertDescription(alert: AlertRow): string {
       }
       return `Overdue at ${port}`
 
-    case 'demurrage_started':
-      return `Demurrage started at ${port}.`
-
     case 'detention_started':
       return `Detention started at ${port}.`
 
@@ -133,7 +130,7 @@ export function DashboardAlertsPanel() {
           .filter(
             (alert) =>
               alert.severity === 'critical' &&
-              ['became_overdue', 'demurrage_started', 'detention_started'].includes(alert.event_type)
+              ['became_overdue', 'detention_started'].includes(alert.event_type)
           )
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
