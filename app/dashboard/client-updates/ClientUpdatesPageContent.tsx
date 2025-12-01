@@ -35,6 +35,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { KpiCard } from '@/components/ui/KpiCard'
+import { useListsContext } from '@/components/providers/ListsProvider'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 
 type DraftMetadata = {
   port?: string | null
@@ -67,6 +76,7 @@ interface ClientUpdatesPageContentProps {
 
 export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentProps) {
   const router = useRouter()
+  const { lists } = useListsContext()
   const [selectedDraft, setSelectedDraft] = useState<EmailDraftWithContainer | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSaving, startSaving] = useTransition()
@@ -155,21 +165,48 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
     }
   }
 
-  const handleGenerateDailyDigests = () => {
+  type GenerateDigestChoice =
+    | { mode: 'all' }
+    | { mode: 'single'; listId: string; listName?: string | null }
+
+  const handleGenerateDailyDigestChoice = (choice: GenerateDigestChoice) => {
     startGenerating(async () => {
       try {
-        const result = await createDailyDigestDraftsForToday()
+        let result
 
-        if (result?.created > 0) {
-          toast.success(`Created ${result.created} daily digest draft(s).`)
+        if (choice.mode === 'all') {
+          result = await createDailyDigestDraftsForToday()
         } else {
-          toast.info('No alerts today – no digests created.')
+          result = await createDailyDigestDraftsForToday({ listId: choice.listId })
+        }
+
+        const createdCount = result?.created ?? 0
+
+        if (createdCount > 0) {
+          if (choice.mode === 'all') {
+            toast.success(`Created ${createdCount} daily digest draft(s) across all lists.`)
+          } else {
+            const name = choice.listName ?? 'this list'
+            toast.success(`Created ${createdCount} daily digest draft(s) for ${name}.`)
+          }
+        } else {
+          if (choice.mode === 'all') {
+            toast.info('No digests created – no lists have containers in warning/overdue/detention today.')
+          } else {
+            const name = choice.listName ?? 'this list'
+            toast.info(`No digest created for ${name} – no containers in warning/overdue/detention today.`)
+          }
         }
 
         router.refresh()
       } catch (err) {
         console.error('Failed to generate daily digests', err)
-        toast.error('Failed to generate daily digests. Please try again.')
+        if (choice.mode === 'all') {
+          toast.error('Failed to generate daily digests. Please try again.')
+        } else {
+          const name = choice.listName ?? 'this list'
+          toast.error(`Failed to generate daily digest for ${name}. Please try again.`)
+        }
       }
     })
   }
@@ -188,14 +225,44 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
         </span>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold tracking-tight text-[#1F2937]">Client Updates</h1>
-          <Button
-            variant="outline"
-            onClick={handleGenerateDailyDigests}
-            disabled={isGenerating}
-            className="border-[#D4D7DE] text-slate-600 hover:bg-[#EEF1F6]"
-          >
-            {isGenerating ? 'Generating digests...' : 'Generate daily digests'}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={isGenerating || !lists || lists.length === 0}
+                className="border-[#D4D7DE] text-slate-600 hover:bg-[#EEF1F6]"
+              >
+                {isGenerating ? 'Generating…' : 'Generate daily digests'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Choose client list</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => handleGenerateDailyDigestChoice({ mode: 'all' })}
+              >
+                All client lists
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {lists && lists.length > 0 ? (
+                lists.map((list) => (
+                  <DropdownMenuItem
+                    key={list.id}
+                    onClick={() =>
+                      handleGenerateDailyDigestChoice({
+                        mode: 'single',
+                        listId: list.id,
+                        listName: list.name ?? 'Untitled list',
+                      })
+                    }
+                  >
+                    {list.name ?? 'Untitled list'}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>No lists available</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <p className="text-sm text-[#6B7280] mt-1">
           Review and send daily digest emails to your clients. Generate digests to see today&apos;s alerts grouped by client list.

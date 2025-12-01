@@ -525,7 +525,9 @@ async function hasDigestDraftForListToday(params: {
  * 
  * @returns { created: number } - Number of digest drafts created
  */
-export async function createDailyDigestDraftsForToday(): Promise<{
+export async function createDailyDigestDraftsForToday(params?: {
+  listId?: string | null
+}): Promise<{
   created: number
 }> {
   let context: ServerAuthContext
@@ -542,9 +544,17 @@ export async function createDailyDigestDraftsForToday(): Promise<{
 
   // 1) Get all lists for this org
   const lists = await fetchListsForOrg(supabase, organizationId)
-  if (!lists.length) {
-    logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: No lists found', {
+
+  const requestedListId = params?.listId ?? null
+  const listsToProcess = requestedListId
+    ? lists.filter((l) => l.id === requestedListId)
+    : lists
+
+  if (!listsToProcess.length) {
+    logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: No lists to process', {
       organization_id: organizationId,
+      requested_list_id: requestedListId,
+      total_lists: lists.length,
     })
     return { created: 0 }
   }
@@ -552,12 +562,14 @@ export async function createDailyDigestDraftsForToday(): Promise<{
   logger.info('[email-drafts-actions] createDailyDigestDraftsForToday: Lists fetched', {
     organization_id: organizationId,
     list_count: lists.length,
+    requested_list_id: requestedListId,
+    lists_to_process: listsToProcess.length,
     lists: lists.map((l) => ({ id: l.id, name: l.name })),
   })
 
   let createdCount = 0
 
-  for (const list of lists) {
+  for (const list of listsToProcess) {
     // Safety check
     if (!list.id) continue
 
@@ -693,6 +705,8 @@ export async function createDailyDigestDraftsForToday(): Promise<{
   logger.info('[email-drafts-actions] createDailyDigestDraftsForToday: Completed', {
     organization_id: organizationId,
     total_lists: lists.length,
+    requested_list_id: requestedListId,
+    lists_processed: listsToProcess.length,
     created_count: createdCount,
   })
 
