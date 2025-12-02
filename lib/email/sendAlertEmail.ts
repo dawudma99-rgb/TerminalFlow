@@ -17,11 +17,12 @@ const resend = new Resend(process.env.RESEND_API_KEY)
  * @returns Promise with success status and optional error message
  */
 export async function sendAlertEmail(params: {
-  to: string
+  to: string | string[]
   subject: string
   text: string
+  html?: string
 }): Promise<{ success: boolean; error?: string }> {
-  const { to, subject, text } = params
+  const { to, subject, text, html } = params
 
   // Check if Resend API key is configured
   if (!process.env.RESEND_API_KEY) {
@@ -34,12 +35,24 @@ export async function sendAlertEmail(params: {
     const fromEmail = process.env.EMAIL_FROM || 'alerts@terminalflow.app'
     const fromAddress = `TerminalFlow Alerts <${fromEmail}>`
 
-    const { data, error } = await resend.emails.send({
+    const emailData: {
+      from: string
+      to: string | string[]
+      subject: string
+      text: string
+      html?: string
+    } = {
       from: fromAddress,
       to,
       subject,
       text,
-    })
+    }
+
+    if (html) {
+      emailData.html = html
+    }
+
+    const { data, error } = await resend.emails.send(emailData)
 
     if (error) {
       logger.error('[sendAlertEmail] Resend error', { to, error: error.message })

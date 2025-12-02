@@ -7,6 +7,7 @@ import { useListsContext } from '@/components/providers/ListsProvider'
 import { ListTabs } from '@/components/lists/ListTabs'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { LoadingState } from '@/components/ui/LoadingState'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import type { ContainerUpdate } from '@/lib/data/containers-actions'
@@ -389,6 +390,7 @@ export default function ContainersPage() {
   // Infinite scroll state
   const [visibleCount, setVisibleCount] = useState(50)
   const previousFiltersRef = useRef({ searchQuery, statusFilter, ownerFilter, viewMode })
+  const previousActiveListIdRef = useRef<string | null>(activeListId)
   
   // Calculate time ago string
   const calculateTimeAgo = (timestamp: number): string => {
@@ -424,6 +426,15 @@ export default function ContainersPage() {
       setTimeAgo('Just now')
     }
   }, [containers, loading])
+
+  // Reset visibleCount to 50 when activeListId changes (list switch)
+  useEffect(() => {
+    if (previousActiveListIdRef.current !== null && activeListId !== previousActiveListIdRef.current) {
+      // List changed - reset visibleCount to 50
+      setVisibleCount(50)
+    }
+    previousActiveListIdRef.current = activeListId
+  }, [activeListId])
 
   // Force immediate render when containers become available (only when not loading)
   useEffect(() => {
@@ -631,15 +642,9 @@ export default function ContainersPage() {
     }
   }, [searchQuery, statusFilter, ownerFilter, viewMode])
 
-  // Update visible count if filtered list is smaller than visible count
-  useEffect(() => {
-    if (filteredContainers.length < visibleCount) {
-      // Use setTimeout to defer the state update outside of the effect
-      setTimeout(() => {
-        setVisibleCount(filteredContainers.length)
-      }, 0)
-    }
-  }, [filteredContainers.length, visibleCount])
+  // Removed: Effect that shrinks visibleCount to match filteredContainers.length
+  // This was causing the "1 container until scroll" bug during list switches.
+  // The slice operation naturally handles cases where filteredContainers.length < visibleCount.
 
   // Only show full-page loading on initial load with no data
   if (isInitialLoading && containers.length === 0) {
@@ -752,13 +757,13 @@ export default function ContainersPage() {
           {/* Board wrapper with consistent min-height for all states */}
           <div className="flex min-h-[520px] flex-col rounded-md border border-[#D4D7DE] bg-white shadow-sm">
             {isSwitchingList ? (
-              <motion.div
-                className="flex flex-1 items-center justify-center"
-                initial={{ opacity: 0.6 }}
-                animate={{ opacity: 1 }}
-              >
-                <span className="text-sm text-slate-500">Loading container board…</span>
-              </motion.div>
+              // Show clean loading UI when switching lists - hide old containers completely
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <Spinner className="h-6 w-6 text-slate-400" />
+                  <p className="text-sm text-slate-500">Loading containers…</p>
+                </div>
+              </div>
             ) : containers.length === 0 || filteredContainers.length === 0 ? (
               <EmptyStates
                 loading={loading}

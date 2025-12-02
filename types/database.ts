@@ -358,6 +358,7 @@ export type Database = {
           created_by_user_id: string | null
           approved_by_user_id: string | null
           last_error: string | null
+          sent_to_emails: string[] | null
         }
         Insert: {
           id?: string
@@ -375,6 +376,7 @@ export type Database = {
           created_by_user_id?: string | null
           approved_by_user_id?: string | null
           last_error?: string | null
+          sent_to_emails?: string[] | null
         }
         Update: {
           id?: string
@@ -392,6 +394,7 @@ export type Database = {
           created_by_user_id?: string | null
           approved_by_user_id?: string | null
           last_error?: string | null
+          sent_to_emails?: string[] | null
         }
         Relationships: [
           {

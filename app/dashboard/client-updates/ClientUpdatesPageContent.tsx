@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Edit2, CheckCircle2, Send, MailCheck, Clock, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Mail, Edit2, CheckCircle2, Send, MailCheck, Clock, AlertCircle, History } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -12,6 +13,7 @@ import {
   createDailyDigestDraftsForToday,
   type EmailDraftWithContainer,
   type ClientEmailEventType,
+  type EmailDraftRow,
 } from '@/lib/data/email-drafts-actions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -66,15 +68,75 @@ function formatDateTime(value?: string | null): string {
   })
 }
 
+function formatDate(date: Date): string {
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
+function getEventTypeLabel(eventType: string): string {
+  switch (eventType) {
+    case 'daily_digest':
+      return 'Daily Digest'
+    case 'became_overdue':
+      return 'Overdue Alert'
+    case 'detention_started':
+      return 'Detention Alert'
+    case 'lfd_warning':
+      return 'Warning Alert'
+    case 'container_closed':
+      return 'Container Closed'
+    default:
+      return eventType.replace(/_/g, ' ')
+  }
+}
+
+function getSentToEmails(draft: EmailDraftRow): string[] {
+  const sentTo = draft.sent_to_emails
+  if (Array.isArray(sentTo) && sentTo.length > 0) {
+    return sentTo
+  }
+  // Fallback to to_email if sent_to_emails is not available
+  if (draft.to_email) {
+    return [draft.to_email]
+  }
+  return []
+}
+
+function formatRecipientsForDisplay(recipients: string[]): string {
+  if (recipients.length === 0) {
+    return '—'
+  }
+  if (recipients.length === 1) {
+    return recipients[0]
+  }
+  return `${recipients.length} recipients`
+}
+
+function getListNameFromDraft(draft: any): string {
+  const metadata = draft.metadata
+  if (metadata && typeof metadata === 'object' && 'list_name' in metadata) {
+    return metadata.list_name || '—'
+  }
+  return '—'
+}
+
 function getPortLabel(metadata: DraftMetadata | null, containerPort?: string | null) {
   return containerPort ?? metadata?.port ?? '—'
 }
 
 interface ClientUpdatesPageContentProps {
   drafts: EmailDraftWithContainer[]
+  sentEmails: EmailDraftRow[]
 }
 
-export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentProps) {
+export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPageContentProps) {
+  const [activeTab, setActiveTab] = useState<'drafts' | 'sent'>('drafts')
   const router = useRouter()
   const { lists } = useListsContext()
   const [selectedDraft, setSelectedDraft] = useState<EmailDraftWithContainer | null>(null)
@@ -269,7 +331,33 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
         </p>
       </header>
 
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-[#E5E7EB]">
+        <button
+          onClick={() => setActiveTab('drafts')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'drafts'
+              ? 'border-[#2563EB] text-[#2563EB]'
+              : 'border-transparent text-[#6B7280] hover:text-[#1F2937]'
+          }`}
+        >
+          Drafts
+        </button>
+        <button
+          onClick={() => setActiveTab('sent')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'sent'
+              ? 'border-[#2563EB] text-[#2563EB]'
+              : 'border-transparent text-[#6B7280] hover:text-[#1F2937]'
+          }`}
+        >
+          Sent emails
+        </button>
+      </div>
+
+      {activeTab === 'drafts' && (
+        <>
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KpiCard
           title="Pending Drafts"
           value={pendingCount}
@@ -418,6 +506,84 @@ export function ClientUpdatesPageContent({ drafts }: ClientUpdatesPageContentPro
                 })}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      )}
+        </>
+      )}
+
+      {activeTab === 'sent' && (
+        <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Sent emails
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sentEmails.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>No sent emails yet.</p>
+                <p className="text-sm mt-2">
+                  Sent emails will appear here after you send them from the Drafts tab.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sent at</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Client / List</TableHead>
+                      <TableHead>Sent to</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sentEmails.map((draft) => {
+                      const sentAt = draft.sent_at ? new Date(draft.sent_at) : null
+                      const listName = getListNameFromDraft(draft)
+                      const recipients = getSentToEmails(draft)
+                      const recipientsDisplay = formatRecipientsForDisplay(recipients)
+
+                      return (
+                        <TableRow key={draft.id} className="hover:bg-[#F9FAFB] transition-colors">
+                          <TableCell className="text-sm">
+                            {sentAt ? formatDate(sentAt) : '—'}
+                          </TableCell>
+                          <TableCell className="text-sm">{getEventTypeLabel(draft.event_type)}</TableCell>
+                          <TableCell className="text-sm font-medium">{draft.subject}</TableCell>
+                          <TableCell className="text-sm text-[#6B7280]">{listName}</TableCell>
+                          <TableCell className="text-sm text-[#6B7280]">
+                            {recipients.length > 1 ? (
+                              <span title={recipients.join(', ')}>{recipientsDisplay}</span>
+                            ) : (
+                              <span>{recipientsDisplay}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Sent
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Link
+                              href={`/dashboard/client-updates/email/${draft.id}`}
+                              className="text-sm text-[#007EA7] hover:underline font-medium"
+                            >
+                              View
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

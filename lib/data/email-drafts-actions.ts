@@ -9,28 +9,20 @@ import { getServerAuthContext, type ServerAuthContext } from '@/lib/auth/serverA
 import { buildDailyDigestForList } from '@/lib/email/dailyDigestFormatter'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
 
-type EmailDraftRow = Database['public']['Tables']['email_drafts']['Row']
+export type EmailDraftRow = Database['public']['Tables']['email_drafts']['Row']
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 type EmailDraftStatus = Database['public']['Tables']['email_drafts']['Row']['status']
 type ListRow = Database['public']['Tables']['container_lists']['Row']
 
-interface OrgContext {
-  userId: string
-  organizationId: string
-}
-
 async function resolveOrgContext(): Promise<{
   supabase: Awaited<ReturnType<typeof createClient>>
-  context: OrgContext | null
+  context: ServerAuthContext | null
 }> {
   try {
     const authContext = await getServerAuthContext()
     return {
       supabase: authContext.supabase,
-      context: {
-        userId: authContext.user.id,
-        organizationId: authContext.organizationId,
-      },
+      context: authContext,
     }
   } catch (error) {
     logger.error('[email-drafts-actions] Exception resolving org context', {
@@ -58,7 +50,7 @@ export async function fetchPendingEmailDraftsForCurrentOrg(): Promise<EmailDraft
 
   logger.debug('[email-drafts-actions] fetchPendingEmailDraftsForCurrentOrg: Resolved organization context', {
     organization_id: context.organizationId,
-    user_id: context.userId,
+    user_id: context.user?.id,
     pending_status_filter: PENDING_STATUS,
   })
 
@@ -145,6 +137,64 @@ export async function fetchPendingEmailDraftsForCurrentOrg(): Promise<EmailDraft
   })
 
   return result
+}
+
+/**
+ * Fetch sent email drafts (history) for the current organization.
+ * Returns up to 50 most recent sent emails, ordered by sent_at desc.
+ */
+export async function fetchSentEmailDraftsForCurrentOrg(): Promise<EmailDraftRow[]> {
+  const { supabase, context } = await resolveOrgContext()
+  if (!context) {
+    logger.debug('[email-drafts-actions] fetchSentEmailDraftsForCurrentOrg: No context resolved, returning empty array')
+    return []
+  }
+
+  const { data: drafts, error } = await supabase
+    .from('email_drafts')
+    .select('*')
+    .eq('organization_id', context.organizationId)
+    .eq('status', 'sent')
+    .order('sent_at', { ascending: false, nullsFirst: false })
+    .limit(50)
+
+  if (error) {
+    logger.error('[email-drafts-actions] Failed to fetch sent drafts', {
+      organization_id: context.organizationId,
+      error: error.message,
+    })
+    return []
+  }
+
+  return drafts ?? []
+}
+
+/**
+ * Fetch a single email draft by ID for the current organization.
+ */
+export async function fetchEmailDraftById(draftId: string): Promise<EmailDraftRow | null> {
+  const { supabase, context } = await resolveOrgContext()
+  if (!context) {
+    return null
+  }
+
+  const { data: draft, error } = await supabase
+    .from('email_drafts')
+    .select('*')
+    .eq('id', draftId)
+    .eq('organization_id', context.organizationId)
+    .single()
+
+  if (error || !draft) {
+    logger.debug('[email-drafts-actions] Draft not found', {
+      draft_id: draftId,
+      organization_id: context.organizationId,
+      error: error?.message,
+    })
+    return null
+  }
+
+  return draft
 }
 
 /**
@@ -249,7 +299,7 @@ export async function approveEmailDraft(params: {
   const { data: updatedDraft, error: updateError } = await supabase
     .from('email_drafts')
     .update({
-      approved_by_user_id: context.userId,
+      approved_by_user_id: context.user.id ?? null,
     })
     .eq('id', params.draftId)
     .eq('organization_id', context.organizationId)
@@ -329,10 +379,14 @@ export async function sendClientEmailForDraft(params: {
 
   // Send the email via Resend
   try {
+    // Extract body_html if available (stored in metadata or as a field)
+    const bodyHtml = (draft as any).body_html || null
+
     const emailResult = await sendAlertEmail({
       to: toEmail,
       subject,
       text: bodyText,
+      html: bodyHtml || undefined,
     })
 
     if (!emailResult.success) {
@@ -356,12 +410,16 @@ export async function sendClientEmailForDraft(params: {
       return { ok: false, error: `Failed to send email: ${errorMessage}` }
     }
 
-    // On success, update status to 'sent' and set sent_at
+    // On success, update status to 'sent' and set sent_at and sent_to_emails
+    // sent_to_emails: store as array (handle both single email string and array)
+    const recipients = Array.isArray(toEmail) ? toEmail : [toEmail]
+    
     const { data: updatedDraft, error: updateError } = await supabase
       .from('email_drafts')
       .update({
         status: 'sent' as const,
         sent_at: new Date().toISOString(),
+        sent_to_emails: recipients,
         last_error: null,
       })
       .eq('id', params.draftId)
@@ -632,9 +690,18 @@ export async function createDailyDigestDraftsForToday(params?: {
         container_count: containers.length,
       })
 
+      // Get organization name for closing signature
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', organizationId)
+        .single()
+      const organizationName = orgData?.name ?? null
+
       const digest = buildDailyDigestForList({
         listName: list.name ?? 'Unnamed list',
         containers,
+        organizationName,
       })
 
       if (!digest) {
@@ -659,6 +726,7 @@ export async function createDailyDigestDraftsForToday(params?: {
       }
 
       // Type assertion needed: container_id is nullable in DB but types haven't been regenerated
+      // body_html is optional field (we'll add to DB separately)
       const { error } = await supabase.from('email_drafts').insert({
         organization_id: organizationId,
         container_id: null as any, // this is a list-level digest (nullable in DB)
@@ -667,6 +735,7 @@ export async function createDailyDigestDraftsForToday(params?: {
         to_email: null, // forwarder will fill this in
         subject: digest.subject,
         body_text: digest.bodyText,
+        body_html: (digest.bodyHtml || null) as any, // Store HTML if available
         metadata,
         created_by_user_id: userId,
         approved_by_user_id: null,

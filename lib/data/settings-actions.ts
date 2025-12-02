@@ -8,6 +8,7 @@ export interface Settings {
   demFreeDays: number
   detFreeDays: number
   weekendChargeable: boolean
+  daysBeforeFreeTimeWarning?: number // Org-level: days before free time ends to trigger Warning alerts
 }
 
 /**
@@ -22,6 +23,7 @@ export async function loadSettings(): Promise<Settings> {
     demFreeDays: 7,
     detFreeDays: 7,
     weekendChargeable: true,
+    daysBeforeFreeTimeWarning: 2, // Default to current behavior
   }
 
   try {

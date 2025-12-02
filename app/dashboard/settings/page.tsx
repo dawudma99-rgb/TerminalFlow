@@ -36,6 +36,7 @@ import {
   Database,
   Package,
   PlusCircle,
+  Bell,
 } from 'lucide-react'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { useRouter } from 'next/navigation'
@@ -118,6 +119,7 @@ export default function SettingsPage() {
           demFreeDays: 7,
           detFreeDays: 7,
           weekendChargeable: true,
+          daysBeforeFreeTimeWarning: 2,
         }
         setSettings(defaults)
         setSettingsLoading(false)
@@ -384,6 +386,40 @@ export default function SettingsPage() {
               When unchecked, weekends are excluded from detention free day calculations. This
               affects how detention fees are calculated for containers.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Alert Settings */}
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Alert Settings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="daysBeforeFreeTimeWarning">
+                Warn me X days before free time ends
+              </Label>
+              <Input
+                id="daysBeforeFreeTimeWarning"
+                type="number"
+                min="1"
+                max="14"
+                value={settings.daysBeforeFreeTimeWarning ?? 2}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    daysBeforeFreeTimeWarning: parseInt(e.target.value) || 2,
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Containers will enter "Warning" status this many days before free time expires.
+                Default: 2 days.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

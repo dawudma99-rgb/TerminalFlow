@@ -8,8 +8,9 @@ type ContainerRow = Database['public']['Tables']['containers']['Row']
 export function buildDailyDigestForList(params: {
   listName: string
   containers: ContainerRow[]
-}): { subject: string; bodyText: string } | null {
-  const { listName, containers } = params
+  organizationName?: string | null
+}): { subject: string; bodyText: string; bodyHtml: string } | null {
+  const { listName, containers, organizationName } = params
 
   // No containers → return null so caller can skip creating a digest
   if (!containers || containers.length === 0) {
@@ -69,117 +70,393 @@ export function buildDailyDigestForList(params: {
 
   // ---- SUBJECT ----
 
-  const subjectParts: string[] = []
+  const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
 
-  if (overdueCount > 0) subjectParts.push(`${overdueCount} overdue`)
-  if (warningCount > 0) subjectParts.push(`${warningCount} in warning`)
-  if (detentionCount > 0) subjectParts.push(`${detentionCount} in detention`)
-  if (closedCount > 0) subjectParts.push(`${closedCount} closed`)
+  // Build optional counts for subject
+  const subjectCounts: string[] = []
+  if (overdueCount > 0) subjectCounts.push(`${overdueCount} overdue`)
+  if (warningCount > 0) subjectCounts.push(`${warningCount} at risk`)
 
-  const summaryText =
-    subjectParts.length > 0 ? subjectParts.join(', ') : 'no changes'
+  const countsText = subjectCounts.length > 0 ? ` (${subjectCounts.join(', ')})` : ''
 
-  const subject = `Daily update – ${listName} (${summaryText})`
+  const subject = `Daily container update – ${listName} – ${today}${countsText}`
 
   // ---- BODY ----
 
+  // Helper to get container number and port
+  const getContainerDisplay = (c: ContainerRow) => {
+    const cn = c.container_no || `Container ${c.id}`
+    const port = (c as any).pod || c.port || null
+    return { container_no: cn, port }
+  }
+
+  // Helper to format date for closed containers
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return null
+    try {
+      const date = new Date(dateStr)
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    } catch {
+      return null
+    }
+  }
+
+  // Build HTML email
+  const htmlParts: string[] = []
+
+  htmlParts.push(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="padding: 30px 40px 20px 40px; background-color: #ffffff;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">Daily container update – ${escapeHtml(listName)}</h1>
+            </td>
+          </tr>
+          
+          <!-- Intro -->
+          <tr>
+            <td style="padding: 0 40px 20px 40px;">
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #374151;">
+                Hi,
+              </p>
+              <p style="margin: 0 0 0 0; font-size: 15px; line-height: 1.6; color: #374151;">
+                Here's today's overview of your active containers. We've highlighted urgent and at-risk containers so you can act early and avoid charges.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Summary -->
+          <tr>
+            <td style="padding: 0 40px 30px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 6px; padding: 20px;">
+  `)
+
+  // Add summary counts (only non-zero)
+  if (overdueCount > 0 || detentionCount > 0 || warningCount > 0 || closedCount > 0) {
+    htmlParts.push('<tr><td style="padding: 0;">')
+    htmlParts.push('<table width="100%" cellpadding="0" cellspacing="0">')
+    
+    if (overdueCount > 0) {
+      htmlParts.push(`
+        <tr>
+          <td style="padding: 4px 0; font-size: 14px; color: #374151;">
+            <strong style="color: #dc2626;">${overdueCount}</strong> overdue container${overdueCount !== 1 ? 's' : ''}
+          </td>
+        </tr>
+      `)
+    }
+    if (detentionCount > 0) {
+      htmlParts.push(`
+        <tr>
+          <td style="padding: 4px 0; font-size: 14px; color: #374151;">
+            <strong style="color: #dc2626;">${detentionCount}</strong> in detention
+          </td>
+        </tr>
+      `)
+    }
+    if (warningCount > 0) {
+      htmlParts.push(`
+        <tr>
+          <td style="padding: 4px 0; font-size: 14px; color: #374151;">
+            <strong style="color: #d97706;">${warningCount}</strong> at risk (free time ending soon)
+          </td>
+        </tr>
+      `)
+    }
+    if (closedCount > 0) {
+      htmlParts.push(`
+        <tr>
+          <td style="padding: 4px 0; font-size: 14px; color: #374151;">
+            <strong style="color: #059669;">${closedCount}</strong> closed today
+          </td>
+        </tr>
+      `)
+    }
+    
+    htmlParts.push('</table>')
+    htmlParts.push('</td></tr>')
+  }
+
+  htmlParts.push(`
+              </table>
+            </td>
+          </tr>
+  `)
+
+  // Overdue / demurrage running section
+  if (overdue.length > 0) {
+    htmlParts.push(`
+          <tr>
+            <td style="padding: 0 40px 20px 40px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #dc2626;">Overdue / demurrage running</h2>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Container</th>
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Status</th>
+                </tr>
+    `)
+    
+    for (const { raw, derived } of overdue) {
+      const { container_no, port } = getContainerDisplay(raw)
+      const daysOverdue = derived.days_left !== null ? Math.abs(derived.days_left) : null
+      const displayText = daysOverdue !== null && daysOverdue > 0 
+        ? `${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue`
+        : 'Overdue'
+      
+      htmlParts.push(`
+                <tr style="border-bottom: 1px solid #f3f4f6;">
+                  <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 500;">
+                    ${escapeHtml(container_no)}${port ? ` (${escapeHtml(port)})` : ''}
+                  </td>
+                  <td style="padding: 12px 0; font-size: 14px; color: #dc2626;">
+                    ${escapeHtml(displayText)}
+                  </td>
+                </tr>
+      `)
+    }
+    
+    htmlParts.push(`
+              </table>
+            </td>
+          </tr>
+    `)
+  }
+
+  // Detention running section
+  if (detention.length > 0) {
+    htmlParts.push(`
+          <tr>
+            <td style="padding: 0 40px 20px 40px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #dc2626;">Detention running</h2>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Container</th>
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Status</th>
+                </tr>
+    `)
+    
+    for (const { raw, derived } of detention) {
+      const { container_no, port } = getContainerDisplay(raw)
+      const detentionDays = derived.detention_chargeable_days
+      const displayText = detentionDays !== null && detentionDays > 0
+        ? `Detention: ${detentionDays} day${detentionDays !== 1 ? 's' : ''}`
+        : 'Detention'
+      
+      htmlParts.push(`
+                <tr style="border-bottom: 1px solid #f3f4f6;">
+                  <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 500;">
+                    ${escapeHtml(container_no)}${port ? ` (${escapeHtml(port)})` : ''}
+                  </td>
+                  <td style="padding: 12px 0; font-size: 14px; color: #dc2626;">
+                    ${escapeHtml(displayText)}
+                  </td>
+                </tr>
+      `)
+    }
+    
+    htmlParts.push(`
+              </table>
+            </td>
+          </tr>
+    `)
+  }
+
+  // At risk section
+  if (warning.length > 0) {
+    htmlParts.push(`
+          <tr>
+            <td style="padding: 0 40px 20px 40px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #d97706;">At risk (free time ending soon)</h2>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Container</th>
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Status</th>
+                </tr>
+    `)
+    
+    for (const { raw, derived } of warning) {
+      const { container_no, port } = getContainerDisplay(raw)
+      const daysLeft = derived.days_left
+      const displayText = daysLeft !== null && daysLeft > 0
+        ? `Free time: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
+        : 'At risk'
+      
+      htmlParts.push(`
+                <tr style="border-bottom: 1px solid #f3f4f6;">
+                  <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 500;">
+                    ${escapeHtml(container_no)}${port ? ` (${escapeHtml(port)})` : ''}
+                  </td>
+                  <td style="padding: 12px 0; font-size: 14px; color: #d97706;">
+                    ${escapeHtml(displayText)}
+                  </td>
+                </tr>
+      `)
+    }
+    
+    htmlParts.push(`
+              </table>
+            </td>
+          </tr>
+    `)
+  }
+
+  // Closed today section
+  if (closedToday.length > 0) {
+    htmlParts.push(`
+          <tr>
+            <td style="padding: 0 40px 20px 40px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #059669;">Closed today</h2>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Container</th>
+                  <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Status</th>
+                </tr>
+    `)
+    
+    for (const { raw } of closedToday) {
+      const { container_no, port } = getContainerDisplay(raw)
+      const updatedDate = formatDate(raw.updated_at)
+      const displayText = updatedDate ? `Closed on ${updatedDate}` : 'Closed today'
+      
+      htmlParts.push(`
+                <tr style="border-bottom: 1px solid #f3f4f6;">
+                  <td style="padding: 12px 0; font-size: 14px; color: #111827; font-weight: 500;">
+                    ${escapeHtml(container_no)}${port ? ` (${escapeHtml(port)})` : ''}
+                  </td>
+                  <td style="padding: 12px 0; font-size: 14px; color: #059669;">
+                    ${escapeHtml(displayText)}
+                  </td>
+                </tr>
+      `)
+    }
+    
+    htmlParts.push(`
+              </table>
+            </td>
+          </tr>
+    `)
+  }
+
+  // Closing
+  const closingName = organizationName || 'Your forwarding team'
+  
+  htmlParts.push(`
+          <!-- Closing -->
+          <tr>
+            <td style="padding: 30px 40px; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #374151;">
+                If you'd like us to prioritize specific containers, just reply to this email.
+              </p>
+              <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #374151;">
+                Best regards,<br>
+                ${escapeHtml(closingName)}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `)
+
+  const bodyHtml = htmlParts.join('')
+
+  // Build plain text version
   const lines: string[] = []
 
-  lines.push(`Daily update for ${listName}`)
+  lines.push(`Daily container update – ${listName}`)
   lines.push('')
-  lines.push(
-    `Summary: ${overdueCount} overdue, ${warningCount} in warning, ${detentionCount} with detention started, ${closedCount} closed today.`
-  )
+  lines.push('Hi,')
+  lines.push('')
+  lines.push("Here's today's overview of your active containers. We've highlighted urgent and at-risk containers so you can act early and avoid charges.")
+  lines.push('')
+  lines.push('Summary:')
+  if (overdueCount > 0) lines.push(`- ${overdueCount} overdue container${overdueCount !== 1 ? 's' : ''}`)
+  if (detentionCount > 0) lines.push(`- ${detentionCount} in detention`)
+  if (warningCount > 0) lines.push(`- ${warningCount} at risk (free time ending soon)`)
+  if (closedCount > 0) lines.push(`- ${closedCount} closed today`)
   lines.push('')
 
-  // Helper to get a readable container label
-  const getContainerLabel = (c: ContainerRow) => {
-    const cn = c.container_no
-    // pod may not exist in DB schema but is used in codebase (see ContainerRecord type)
-    const pod = (c as any).pod || c.port || null
-
-    if (cn && pod) return `${cn} – ${pod}`
-    if (cn) return cn
-    return `Container ${c.id}`
-  }
-
-  // Overdue
   if (overdue.length > 0) {
-    lines.push('Overdue containers (demurrage started):')
+    lines.push('Overdue / demurrage running:')
     for (const { raw, derived } of overdue) {
-      const label = getContainerLabel(raw)
-      const daysOverdue =
-        derived.days_left !== null ? Math.abs(derived.days_left) : null
-      const estFees = derived.demurrage_fees
-      const extraBits: string[] = []
-
-      if (daysOverdue !== null && daysOverdue > 0)
-        extraBits.push(`${daysOverdue} days overdue`)
-      if (estFees > 0) extraBits.push(`est. fees ${estFees.toFixed(2)}`)
-
-      const extras = extraBits.length > 0 ? ` (${extraBits.join(', ')})` : ''
-
-      lines.push(`- ${label}${extras}`)
+      const { container_no, port } = getContainerDisplay(raw)
+      const daysOverdue = derived.days_left !== null ? Math.abs(derived.days_left) : null
+      const displayText = daysOverdue !== null && daysOverdue > 0 
+        ? `${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue`
+        : 'Overdue'
+      lines.push(`  ${container_no}${port ? ` (${port})` : ''} – ${displayText}`)
     }
     lines.push('')
   }
 
-  // Warning
-  if (warning.length > 0) {
-    lines.push('Approaching last free day (in warning):')
-    for (const { raw, derived } of warning) {
-      const label = getContainerLabel(raw)
-      const daysLeft = derived.days_left
-      const lfd = derived.lfd_date
-
-      const bits: string[] = []
-      if (daysLeft !== null && daysLeft > 0)
-        bits.push(`${daysLeft} days left of free time`)
-      if (lfd) bits.push(`LFD: ${lfd}`)
-
-      const extras = bits.length > 0 ? ` (${bits.join(', ')})` : ''
-
-      lines.push(`- ${label}${extras}`)
-    }
-    lines.push('')
-  }
-
-  // Detention started
   if (detention.length > 0) {
-    lines.push('Detention started:')
+    lines.push('Detention running:')
     for (const { raw, derived } of detention) {
-      const label = getContainerLabel(raw)
+      const { container_no, port } = getContainerDisplay(raw)
       const detentionDays = derived.detention_chargeable_days
-
-      const bits: string[] = []
-      if (detentionDays !== null && detentionDays > 0)
-        bits.push(`${detentionDays} chargeable days so far`)
-
-      const extras = bits.length > 0 ? ` (${bits.join(', ')})` : ''
-
-      lines.push(`- ${label}${extras}`)
+      const displayText = detentionDays !== null && detentionDays > 0
+        ? `Detention: ${detentionDays} day${detentionDays !== 1 ? 's' : ''}`
+        : 'Detention'
+      lines.push(`  ${container_no}${port ? ` (${port})` : ''} – ${displayText}`)
     }
     lines.push('')
   }
 
-  // Closed today
+  if (warning.length > 0) {
+    lines.push('At risk (free time ending soon):')
+    for (const { raw, derived } of warning) {
+      const { container_no, port } = getContainerDisplay(raw)
+      const daysLeft = derived.days_left
+      const displayText = daysLeft !== null && daysLeft > 0
+        ? `Free time: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
+        : 'At risk'
+      lines.push(`  ${container_no}${port ? ` (${port})` : ''} – ${displayText}`)
+    }
+    lines.push('')
+  }
+
   if (closedToday.length > 0) {
-    lines.push('Recently closed containers:')
+    lines.push('Closed today:')
     for (const { raw } of closedToday) {
-      const label = getContainerLabel(raw)
-      const milestone = raw.milestone
-      const extras = milestone ? ` (${milestone})` : ''
-
-      lines.push(`- ${label}${extras}`)
+      const { container_no, port } = getContainerDisplay(raw)
+      const updatedDate = formatDate(raw.updated_at)
+      const displayText = updatedDate ? `Closed on ${updatedDate}` : 'Closed today'
+      lines.push(`  ${container_no}${port ? ` (${port})` : ''} – ${displayText}`)
     }
     lines.push('')
   }
 
   lines.push('')
-  lines.push('Reply to this email or contact your forwarder if you need changes.')
+  lines.push("If you'd like us to prioritize specific containers, just reply to this email.")
   lines.push('')
+  lines.push(`Best regards,`)
+  lines.push(closingName)
 
   const bodyText = lines.join('\n')
 
-  return { subject, bodyText }
+  return { subject, bodyText, bodyHtml }
+}
+
+// Helper to escape HTML
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }

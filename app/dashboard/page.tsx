@@ -1,6 +1,7 @@
 import { backfillOverdueAlertsForCurrentOrg, backfillWarningAlertsForCurrentOrg } from '@/lib/data/overdue-sweep'
 import { logger } from '@/lib/utils/logger'
 import { DashboardContent } from './DashboardContent'
+import { fetchRecentAlertsForDashboard } from '@/lib/data/alerts-actions'
 
 /**
  * Server component wrapper for the Dashboard page.
@@ -30,6 +31,9 @@ export default async function DashboardPage() {
     })
   })
 
+  // Fetch recent alerts for "Changes Since Yesterday" section
+  const recentAlerts = await fetchRecentAlertsForDashboard()
+
   // Immediately render dashboard UI
-  return <DashboardContent />
+  return <DashboardContent recentAlerts={recentAlerts} />
 }

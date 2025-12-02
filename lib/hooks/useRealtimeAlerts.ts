@@ -97,15 +97,29 @@ export function useRealtimeAlerts(): UseRealtimeAlertsReturn {
           if (status === 'SUBSCRIBED') {
             setConnectionStatus('connected')
             reconnectAttemptsRef.current = 0
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          } else if (status === 'CLOSED') {
+            // CLOSED is normal during cleanup/unmount, don't warn
+            setConnectionStatus('disconnected')
+            logger.debug('[useRealtimeAlerts] Channel closed (normal during cleanup)')
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             setConnectionStatus('disconnected')
             // Attempt to reconnect if we haven't exceeded max attempts
             if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
               reconnectAttemptsRef.current += 1
-              logger.warn('[useRealtimeAlerts] Connection lost, attempting reconnect', {
-                attempt: reconnectAttemptsRef.current,
-                maxAttempts: MAX_RECONNECT_ATTEMPTS,
-              })
+              // Use debug for early attempts, warn only when max attempts reached
+              if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+                logger.warn('[useRealtimeAlerts] Connection lost, max reconnection attempts reached', {
+                  attempt: reconnectAttemptsRef.current,
+                  maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                  status,
+                })
+              } else {
+                logger.debug('[useRealtimeAlerts] Connection lost, attempting reconnect', {
+                  attempt: reconnectAttemptsRef.current,
+                  maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                  status,
+                })
+              }
               reconnectTimeoutRef.current = setTimeout(() => {
                 if (isMountedRef.current) {
                   subscribe()
@@ -114,6 +128,7 @@ export function useRealtimeAlerts(): UseRealtimeAlertsReturn {
             } else {
               logger.error('[useRealtimeAlerts] Max reconnection attempts reached', {
                 attempts: reconnectAttemptsRef.current,
+                status,
               })
             }
           } else if (status === 'JOINING') {

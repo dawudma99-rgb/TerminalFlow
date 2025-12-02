@@ -160,22 +160,32 @@ export function computeDaysLeft(arrival?: string | null, freeDays = 7): number |
 
 /**
  * Compute the container status.
+ * @param c - Container record
+ * @param warningThresholdDays - Days before free time ends to trigger Warning (default: 2)
  */
-export function computeContainerStatus(c: ContainerRecord): ContainerStatus {
+export function computeContainerStatus(
+  c: ContainerRecord,
+  warningThresholdDays: number = 2
+): ContainerStatus {
   if (c.is_closed) return 'Closed'
   const daysLeft = computeDaysLeft(c.arrival_date, c.free_days ?? 7)
   if (daysLeft === null) return 'Safe'
-  if (daysLeft > 2) return 'Safe'
+  if (daysLeft > warningThresholdDays) return 'Safe'
   if (daysLeft > 0) return 'Warning'
   return 'Overdue'
 }
 
 /**
  * Compute derived fields (status, days_left, etc.)
+ * @param c - Container record
+ * @param warningThresholdDays - Days before free time ends to trigger Warning (optional, uses default if not provided)
  */
-export function computeDerivedFields(c: ContainerRecord): ContainerWithDerivedFields {
+export function computeDerivedFields(
+  c: ContainerRecord,
+  warningThresholdDays?: number
+): ContainerWithDerivedFields {
   const days_left = computeDaysLeft(c.arrival_date, c.free_days ?? 7)
-  const status = computeContainerStatus(c)
+  const status = computeContainerStatus(c, warningThresholdDays)
   const demurrageTiers = resolveTierArray(c.demurrage_tiers)
   const detentionTiers = resolveTierArray(c.detention_tiers)
   const demurrageRate = resolveFeeRate(c.demurrage_fee_if_late)

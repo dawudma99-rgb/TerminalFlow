@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
 import { logger } from '@/lib/utils/logger'
+import { loadSettings } from '@/lib/data/settings-actions'
 
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
@@ -35,11 +36,23 @@ export async function createAlertsForContainerChange(params: {
 }): Promise<void> {
   const { supabase, previousContainer, newContainer, currentUserId } = params
 
-  // Compute derived fields for both old and new containers
+  // Get org-level warning threshold setting (defaults to 2 days for backward compatibility)
+  let warningThresholdDays = 2
+  try {
+    const settings = await loadSettings()
+    warningThresholdDays = settings.daysBeforeFreeTimeWarning ?? 2
+  } catch (error) {
+    // Fall back to default if settings can't be loaded
+    logger.debug('[createAlertsForContainerChange] Failed to load settings, using default threshold', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  // Compute derived fields for both old and new containers (with org-level threshold)
   const oldDerived: ContainerWithDerivedFields | null = previousContainer
-    ? computeDerivedFields(previousContainer)
+    ? computeDerivedFields(previousContainer, warningThresholdDays)
     : null
-  const newDerived = computeDerivedFields(newContainer)
+  const newDerived = computeDerivedFields(newContainer, warningThresholdDays)
 
   const alertsToCreate: Database['public']['Tables']['alerts']['Insert'][] = []
 
@@ -97,6 +110,7 @@ export async function createAlertsForContainerChange(params: {
         container_no: newContainer.container_no,
         port: newContainer.port,
         milestone: newContainer.milestone,
+        estimated_demurrage_fees: newDerived.demurrage_fees > 0 ? newDerived.demurrage_fees : undefined,
       },
       created_by_user_id: currentUserId ?? null,
     })
@@ -132,6 +146,7 @@ export async function createAlertsForContainerChange(params: {
         gate_out_date: newContainer.gate_out_date,
         empty_return_date: newContainer.empty_return_date,
         lfd_date: newDerived.lfd_date,
+        estimated_detention_fees: newDerived.detention_fees > 0 ? newDerived.detention_fees : undefined,
       },
       created_by_user_id: currentUserId ?? null,
     })
@@ -140,7 +155,7 @@ export async function createAlertsForContainerChange(params: {
     // Daily digests are generated separately via createDailyDigestDraftsForToday().
   }
 
-  // 5) Container closed
+  // 4) Container closed
   // Condition: previous is_closed = false AND new is_closed = true
   const oldIsClosed = previousContainer?.is_closed ?? false
   const newIsClosed = newContainer.is_closed
