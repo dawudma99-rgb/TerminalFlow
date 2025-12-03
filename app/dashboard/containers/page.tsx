@@ -2,7 +2,7 @@
 
 import { logger } from '@/lib/utils/logger'
 import { useContainers } from '@/lib/data/useContainers'
-import { updateContainer, deleteContainer, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
+import { updateContainer, deleteContainer, bulkDeleteContainers, type ContainerRecordWithComputed } from '@/lib/data/containers-actions'
 import { useListsContext } from '@/components/providers/ListsProvider'
 import { ListTabs } from '@/components/lists/ListTabs'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -19,6 +19,7 @@ import { AddContainerTrigger } from './components/AddContainerTrigger'
 import { FilterToolbar } from './components/FilterToolbar'
 import { StatsSummary } from './components/StatsCards'
 import { EmptyStates } from './components/EmptyStates'
+import { BulkActionsBar } from './components/BulkActionsBar'
 import {
   Select,
   SelectContent,
@@ -392,6 +393,11 @@ export default function ContainersPage() {
   const previousFiltersRef = useRef({ searchQuery, statusFilter, ownerFilter, viewMode })
   const previousActiveListIdRef = useRef<string | null>(activeListId)
   
+  // Bulk selection state
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
+  
   // Calculate time ago string
   const calculateTimeAgo = (timestamp: number): string => {
     const now = Date.now()
@@ -430,11 +436,19 @@ export default function ContainersPage() {
   // Reset visibleCount to 50 when activeListId changes (list switch)
   useEffect(() => {
     if (previousActiveListIdRef.current !== null && activeListId !== previousActiveListIdRef.current) {
-      // List changed - reset visibleCount to 50
+      // List changed - reset visibleCount to 50 and clear selection
       setVisibleCount(50)
+      setSelectedIds([])
+      setBulkMode(false)
     }
     previousActiveListIdRef.current = activeListId
   }, [activeListId])
+
+  // Clear selection and exit bulk mode when filters change
+  useEffect(() => {
+    setSelectedIds([])
+    setBulkMode(false)
+  }, [searchQuery, statusFilter, ownerFilter, viewMode])
 
   // Force immediate render when containers become available (only when not loading)
   useEffect(() => {
@@ -467,6 +481,31 @@ export default function ContainersPage() {
       logger.error('Error updating container status:', error)
       toast.error('Failed to update container status. Please try again.')
     }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+
+    setIsDeleting(true)
+    try {
+      const { deleted } = await bulkDeleteContainers(selectedIds)
+      toast.success(`Deleted ${deleted} ${deleted === 1 ? 'container' : 'containers'}`)
+      setSelectedIds([])
+      setBulkMode(false) // Exit bulk mode on success
+      await reload()
+    } catch (error) {
+      logger.error('Error bulk deleting containers:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete containers'
+      toast.error(errorMessage)
+      // Keep selection on error so user can retry
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleExitBulkMode = () => {
+    setBulkMode(false)
+    setSelectedIds([])
   }
 
   // Get unique owners from containers
@@ -691,6 +730,7 @@ export default function ContainersPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <AddContainerTrigger reload={reload} />
               <Button
                 variant="outline"
                 size="sm"
@@ -733,17 +773,43 @@ export default function ContainersPage() {
             onClearFilters={handleClearFilters}
             owners={uniqueOwners}
             hasActiveFilters={hasActiveFilters}
-            addAction={<AddContainerTrigger reload={reload} />}
           />
 
-          <StatsSummary
-            total={stats.total}
-            overdue={stats.overdue}
-            warning={stats.warning}
-            safe={stats.safe}
-            closed={stats.closed}
-            updatedLabel={`Synced ${timeAgo}`}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <StatsSummary
+              total={stats.total}
+              overdue={stats.overdue}
+              warning={stats.warning}
+              safe={stats.safe}
+              closed={stats.closed}
+              updatedLabel={`Synced ${timeAgo}`}
+            />
+            <Button
+              variant={bulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (bulkMode) {
+                  handleExitBulkMode()
+                } else {
+                  setBulkMode(true)
+                }
+              }}
+              className={bulkMode 
+                ? "h-8 gap-1.5 rounded border border-[#2563EB] bg-[#2563EB] text-xs text-white hover:bg-[#2563EB]/90"
+                : "h-8 gap-1.5 rounded border border-[#D4D7DE] bg-white text-xs text-slate-600 hover:bg-[#EEF1F6]"
+              }
+              aria-label={bulkMode ? "Exit bulk actions mode" : "Enter bulk actions mode"}
+            >
+              {bulkMode ? (
+                <>
+                  <span className="h-3.5 w-3.5">✓</span>
+                  Bulk actions
+                </>
+              ) : (
+                'Bulk actions'
+              )}
+            </Button>
+          </div>
         </section>
 
         {error && containers.length > 0 && (
@@ -756,6 +822,14 @@ export default function ContainersPage() {
         <div className="flex-1">
           {/* Board wrapper with consistent min-height for all states */}
           <div className="flex min-h-[520px] flex-col rounded-md border border-[#D4D7DE] bg-white shadow-sm">
+            {bulkMode && selectedIds.length > 0 && (
+              <BulkActionsBar
+                selectedCount={selectedIds.length}
+                onDelete={handleBulkDelete}
+                onExit={handleExitBulkMode}
+                isDeleting={isDeleting}
+              />
+            )}
             {isSwitchingList ? (
               // Show clean loading UI when switching lists - hide old containers completely
               <div className="flex flex-1 items-center justify-center">
@@ -788,6 +862,9 @@ export default function ContainersPage() {
                     onDelete={handleDeleteContainer}
                     onToggleStatus={handleToggleContainerStatus}
                     reload={reload}
+                    bulkMode={bulkMode}
+                    selectedIds={selectedIds}
+                    onSelectionChange={setSelectedIds}
                   />
                 </div>
                 <div className="border-t border-[#D4D7DE] bg-[#F4F6FA] px-4 py-2 text-xs text-slate-500">

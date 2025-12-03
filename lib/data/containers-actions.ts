@@ -321,3 +321,56 @@ export async function deleteContainer(id: string) {
   return { success: true, id }
 }
 
+/**
+ * Bulk delete multiple container records.
+ * Validates that all containers belong to the user's organization via RLS.
+ * Returns the number of containers actually deleted.
+ */
+export async function bulkDeleteContainers(ids: string[]): Promise<{ deleted: number }> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new Error('No container IDs provided')
+  }
+
+  // Validate all IDs are UUIDs
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const invalidIds = ids.filter(id => !uuidRegex.test(id))
+  if (invalidIds.length > 0) {
+    logger.error('bulkDeleteContainers invalid ID format', { invalidIds })
+    throw new Error(`Invalid container ID format. Expected UUIDs.`)
+  }
+
+  const { supabase, organizationId } = await getServerAuthContext()
+
+  logger.info('[bulkDeleteContainers] Starting bulk delete', {
+    count: ids.length,
+    organizationId,
+  })
+
+  // Delete all containers in a single query
+  // RLS ensures only containers belonging to the organization can be deleted
+  const { data, error } = await supabase
+    .from('containers')
+    .delete()
+    .in('id', ids)
+    .eq('organization_id', organizationId)
+    .select('id')
+
+  if (error) {
+    logger.error('Supabase bulkDeleteContainers error', { error, idsCount: ids.length })
+    throw new Error(`Supabase bulkDeleteContainers error: ${error.message}`)
+  }
+
+  const deletedCount = data?.length || 0
+
+  logger.info('[bulkDeleteContainers] Bulk delete completed', {
+    requested: ids.length,
+    deleted: deletedCount,
+    organizationId,
+  })
+
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/containers')
+
+  return { deleted: deletedCount }
+}
+

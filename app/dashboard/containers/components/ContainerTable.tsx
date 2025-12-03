@@ -19,7 +19,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import clsx from 'clsx'
 import { Edit, Trash2, Lock, Unlock, Loader2, Info } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type {
   ContainerRecordWithComputed,
   ContainerMilestone,
@@ -55,6 +55,10 @@ interface ContainerTableProps {
   onDelete: (container: ContainerRecordWithComputed) => void
   onToggleStatus: (container: ContainerRecordWithComputed) => void
   reload: () => Promise<void>
+  // Bulk selection props
+  bulkMode?: boolean
+  selectedIds?: string[]
+  onSelectionChange?: (ids: string[]) => void
 }
 
 function formatDate(dateString?: string | null): string {
@@ -115,7 +119,50 @@ export function ContainerTable({
   onDelete,
   onToggleStatus,
   reload,
+  bulkMode = false,
+  selectedIds = [],
+  onSelectionChange,
 }: ContainerTableProps) {
+  const isSelectionMode = bulkMode && onSelectionChange !== undefined
+  const allVisibleSelected = isSelectionMode && containers.length > 0 && containers.every(c => selectedIds.includes(c.id))
+  const someVisibleSelected = isSelectionMode && containers.some(c => selectedIds.includes(c.id))
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null)
+
+  // Update indeterminate state of select-all checkbox
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someVisibleSelected && !allVisibleSelected
+    }
+  }, [someVisibleSelected, allVisibleSelected])
+
+  const handleToggleSelect = (containerId: string, e?: React.MouseEvent) => {
+    if (!onSelectionChange) return
+    if (e) {
+      e.stopPropagation()
+    }
+    if (selectedIds.includes(containerId)) {
+      onSelectionChange(selectedIds.filter(id => id !== containerId))
+    } else {
+      onSelectionChange([...selectedIds, containerId])
+    }
+  }
+
+  const handleToggleSelectAll = (e?: React.MouseEvent) => {
+    if (!onSelectionChange) return
+    if (e) {
+      e.stopPropagation()
+    }
+    if (allVisibleSelected) {
+      // Deselect all visible containers
+      const visibleIds = containers.map(c => c.id)
+      onSelectionChange(selectedIds.filter(id => !visibleIds.includes(id)))
+    } else {
+      // Select all visible containers
+      const visibleIds = containers.map(c => c.id)
+      const newSelected = [...new Set([...selectedIds, ...visibleIds])]
+      onSelectionChange(newSelected)
+    }
+  }
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false)
   const [selectedContainer, setSelectedContainer] = useState<ContainerRecordWithComputed | null>(null)
   const [noteDraft, setNoteDraft] = useState('')
@@ -181,6 +228,18 @@ export function ContainerTable({
       <Table className="text-[13px]">
         <TableHeader className="sticky top-0 z-10 bg-[#F8FAFD] text-[11px] uppercase tracking-[0.14em] text-slate-500">
           <TableRow className="border-b border-[#DDE1E8]">
+            {isSelectionMode && (
+              <TableHead className="w-12">
+                <input
+                  type="checkbox"
+                  ref={selectAllCheckboxRef}
+                  checked={allVisibleSelected}
+                  onChange={(e) => handleToggleSelectAll(e)}
+                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#2563EB] focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-0"
+                  aria-label="Select all visible containers"
+                />
+              </TableHead>
+            )}
             <TableHead className="w-32">Container</TableHead>
             <TableHead className="w-32">B/L Number</TableHead>
             <TableHead className="w-24">
@@ -244,8 +303,25 @@ export function ContainerTable({
               milestoneOverrides[container.id] ?? normalizedMilestone
             const isSavingMilestone = !!milestoneSaving[container.id]
 
+            const isSelected = selectedIds.includes(container.id)
+
             return (
               <TableRow key={container.id} className="group border-b border-[#E4E7ED] hover:bg-[#F2F5FA]">
+                {isSelectionMode && (
+                  <TableCell className="w-12">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        handleToggleSelect(container.id)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#2563EB] focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-0"
+                      aria-label={`Select container ${container.container_no || container.id}`}
+                    />
+                  </TableCell>
+                )}
                 <TableCell className="font-mono text-sm text-slate-700">
                   {container.container_no || '—'}
                 </TableCell>

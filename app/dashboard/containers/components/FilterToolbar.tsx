@@ -35,7 +35,7 @@ interface FilterToolbarProps {
   onClearFilters: () => void
   owners: string[]
   hasActiveFilters: boolean
-  addAction: React.ReactNode
+  addAction?: React.ReactNode
   onExport?: () => void
   exporting?: boolean
 }
@@ -169,7 +169,7 @@ export function FilterToolbar({
             </Button>
           )}
 
-          {addAction}
+          {addAction && addAction}
         </div>
       </div>
 
