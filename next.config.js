@@ -5,7 +5,7 @@ const CONTENT_SECURITY_POLICY = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   img-src 'self' blob: data:;
   font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io;
   frame-ancestors 'none';
 `;
 
@@ -63,3 +63,12 @@ const nextConfig = {
 
 module.exports = nextConfig;
 
+
+
+const { withSentryConfig } = require("@sentry/nextjs");
+
+module.exports = withSentryConfig(nextConfig, {
+  org: "terminalflow",
+  project: "javascript-nextjs",
+  silent: true,
+});

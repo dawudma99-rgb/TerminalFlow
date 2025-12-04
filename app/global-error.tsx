@@ -1,5 +1,7 @@
 'use client'
 
+import * as Sentry from "@sentry/nextjs"
+import { useEffect } from "react"
 import { logger } from '@/lib/utils/logger'
 import { Button } from '@/components/ui/button'
 import { AlertCircle } from 'lucide-react'
@@ -12,6 +14,10 @@ export default function GlobalError({
   reset: () => void
 }) {
   logger.error('🔥 [GlobalError] App crashed:', error)
+
+  useEffect(() => {
+    Sentry.captureException(error)
+  }, [error])
 
   return (
     <html lang="en">
