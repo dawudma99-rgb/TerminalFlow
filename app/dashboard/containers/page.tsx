@@ -386,7 +386,7 @@ export default function ContainersPage() {
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
-  const [viewMode, setViewMode] = useState<'demurrage' | 'detention' | 'both'>('both')
+  const [viewMode, setViewMode] = useState<'demurrage' | 'detention' | 'both'>('demurrage')
   
   // Infinite scroll state
   const [visibleCount, setVisibleCount] = useState(50)

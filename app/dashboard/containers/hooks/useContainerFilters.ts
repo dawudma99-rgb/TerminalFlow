@@ -19,7 +19,7 @@ export function useContainerFilters(containers: ContainerRecordWithComputed[]) {
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
-  const [viewMode, setViewMode] = useState<'demurrage' | 'detention' | 'both'>('both')
+  const [viewMode, setViewMode] = useState<'demurrage' | 'detention' | 'both'>('demurrage')
 
   // Get unique owners from containers
   const uniqueOwners = useMemo(() => {

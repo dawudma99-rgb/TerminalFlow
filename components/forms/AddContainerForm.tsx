@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -236,12 +235,13 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
         }))
         
         // Found org-specific defaults - auto-load them
+        // Only auto-enable demurrage, detention must be manually enabled
         setFormData(prev => ({
           ...prev,
           demurrage_tiers: normalizedDemurrageTiers,
           detention_tiers: normalizedDetentionTiers,
           demurrage_enabled: normalizedDemurrageTiers.length > 0,
-          detention_enabled: normalizedDetentionTiers.length > 0
+          detention_enabled: false // Keep detention disabled, user must manually enable
         }))
         setCarrierDefaultsLoaded(true)
         toast.success(`Loaded saved defaults for ${carrier}`)
@@ -258,7 +258,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
             demurrage_tiers: fallbackDem,
             detention_tiers: fallbackDet,
             demurrage_enabled: true,
-            detention_enabled: true
+            detention_enabled: false // Keep detention disabled, user must manually enable
           }))
           toast.info(`Applied UK standard rates for ${carrier}`)
         }
@@ -448,32 +448,34 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
     >
       <DialogContent 
         aria-describedby="add-container-dialog-description"
-        className="max-w-5xl max-h-[90vh] overflow-y-auto p-0"
+        className="!max-w-[85vw] !w-[1200px] !h-[500px] !max-h-[500px] overflow-y-auto p-0 rounded-md"
       >
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-2xl font-semibold">
-            <Package className="h-6 w-6 text-primary" />
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-[#E5E7EB] bg-white">
+          <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold text-[#111827]">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#2563EB]/10">
+              <Package className="h-4 w-4 text-[#2563EB]" />
+            </div>
             Add New Container
           </DialogTitle>
-          <DialogDescription id="add-container-dialog-description">
-            Create a new container record so you can track demurrage and detention exposure.
+          <DialogDescription id="add-container-dialog-description" className="text-xs text-[#6B7280] mt-1.5">
+            Fill in the details below to create a new container record. Only the container number and arrival date are required.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-6 py-6 space-y-6">
+        <div className="px-6 py-4 space-y-4 bg-[#F9FAFB]">
           {/* 1️⃣ Basic Information */}
-          <Card className="border shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Info className="h-4 w-4 text-muted-foreground" />
+          <div className="bg-white rounded-md border border-[#E5E7EB] shadow-sm p-4">
+            <div className="mb-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-[#111827] mb-1">
+                <Info className="h-3.5 w-3.5 text-[#2563EB]" />
                 Basic Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-2">
-                  <Label htmlFor="container_no" className="text-sm font-medium">
-                    Container Number *
+              </h3>
+              <p className="text-xs text-[#6B7280] ml-5.5">Essential container details</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="container_no" className="text-xs font-medium text-[#111827]">
+                    Container Number <span className="text-[#DC2626]">*</span>
                   </Label>
                   <Input
                     id="container_no"
@@ -490,15 +492,15 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       }
                     }}
                     placeholder="e.g., ABCD1234567"
-                    className={validationErrors.container_no ? 'border-destructive' : ''}
+                    className={`h-8 rounded border text-xs ${validationErrors.container_no ? 'border-[#DC2626]' : 'border-[#D4D7DE] focus:border-[#2563EB] focus:ring-0'}`}
                   />
                   {validationErrors.container_no && (
-                    <p className="text-sm text-destructive mt-1">{validationErrors.container_no}</p>
+                    <p className="text-xs text-[#DC2626] mt-1">{validationErrors.container_no}</p>
                   )}
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="bl_number" className="text-sm font-medium">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bl_number" className="text-xs font-medium text-[#111827]">
                     B/L Number
                   </Label>
                   <Input
@@ -506,18 +508,19 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     value={formData.bl_number}
                     onChange={(e) => handleInputChange('bl_number', e.target.value)}
                     placeholder="Enter B/L number"
+                    className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                   />
                 </div>
                 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <Label htmlFor="pol" className="text-sm font-medium">
+                    <Label htmlFor="pol" className="text-xs font-medium text-[#111827]">
                       POL
                     </Label>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          <Info className="h-3 w-3 text-[#6B7280] cursor-help hover:text-[#111827]" />
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Port of Loading – where the container is shipped from.</p>
@@ -532,18 +535,19 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     placeholder="Enter POL"
                     aria-label="Port of Loading"
                     title="Port of Loading – where the container is shipped from."
+                    className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                   />
                 </div>
                 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <Label htmlFor="pod" className="text-sm font-medium">
+                    <Label htmlFor="pod" className="text-xs font-medium text-[#111827]">
                       POD
                     </Label>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                          <Info className="h-3 w-3 text-[#6B7280] cursor-help hover:text-[#111827]" />
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Port of Discharge – where the container arrives.</p>
@@ -558,11 +562,12 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     placeholder="Enter POD"
                     aria-label="Port of Discharge"
                     title="Port of Discharge – where the container arrives."
+                    className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="milestone" className="text-sm font-medium">
+                <div className="space-y-1.5">
+                  <Label htmlFor="milestone" className="text-xs font-medium text-[#111827]">
                     Milestone
                   </Label>
                   <Select
@@ -571,10 +576,10 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       handleInputChange('milestone', isValidMilestone(value) ? value : DEFAULT_MILESTONE)
                     }
                   >
-                    <SelectTrigger id="milestone" className="w-full">
+                    <SelectTrigger id="milestone" className="w-full h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="text-xs">
                       {CONTAINER_MILESTONES.map((milestone) => (
                         <SelectItem key={milestone} value={milestone}>
                           {milestone}
@@ -584,9 +589,9 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   </Select>
                 </div>
  
-                <div className="space-y-2">
-                  <Label htmlFor="arrival_date" className="text-sm font-medium">
-                    Arrival Date *
+                <div className="space-y-1.5">
+                  <Label htmlFor="arrival_date" className="text-xs font-medium text-[#111827]">
+                    Arrival Date <span className="text-[#DC2626]">*</span>
                   </Label>
                   <Input
                     id="arrival_date"
@@ -603,15 +608,15 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         })
                       }
                     }}
-                    className={validationErrors.arrival_date ? 'border-destructive' : ''}
+                    className={`h-8 rounded border text-xs ${validationErrors.arrival_date ? 'border-[#DC2626]' : 'border-[#D4D7DE] focus:border-[#2563EB] focus:ring-0'}`}
                   />
                   {validationErrors.arrival_date && (
-                    <p className="text-sm text-destructive mt-1">{validationErrors.arrival_date}</p>
+                    <p className="text-xs text-[#DC2626] mt-1">{validationErrors.arrival_date}</p>
                   )}
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="free_days" className="text-sm font-medium">
+                <div className="space-y-1.5">
+                  <Label htmlFor="free_days" className="text-xs font-medium text-[#111827]">
                     Free Days
                   </Label>
                   <Input
@@ -620,11 +625,12 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     value={formData.free_days}
                     onChange={(e) => handleInputChange('free_days', parseInt(e.target.value) || 7)}
                     min="1"
+                    className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="carrier" className="text-sm font-medium">
+                <div className="space-y-1.5">
+                  <Label htmlFor="carrier" className="text-xs font-medium text-[#111827]">
                     Carrier
                   </Label>
                   <Select
@@ -634,10 +640,10 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       await loadCarrierDefaults(carrier)
                     }}
                   >
-                    <SelectTrigger id="carrier" className="w-full">
+                    <SelectTrigger id="carrier" className="w-full h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0">
                       <SelectValue placeholder="Select a carrier" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="text-xs">
                       {CARRIER_NAMES.map((name) => (
                         <SelectItem key={name} value={name}>
                           {name}
@@ -647,18 +653,18 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   </Select>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="container_size" className="text-sm font-medium">
+                <div className="space-y-1.5">
+                  <Label htmlFor="container_size" className="text-xs font-medium text-[#111827]">
                     Container Size
                   </Label>
                   <Select
                     value={formData.container_size || ''}
                     onValueChange={(value) => handleInputChange('container_size', value)}
                   >
-                    <SelectTrigger id="container_size" className="w-full">
+                    <SelectTrigger id="container_size" className="w-full h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0">
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="text-xs">
                       <SelectItem value="20ft">20ft</SelectItem>
                       <SelectItem value="40ft">40ft</SelectItem>
                       <SelectItem value="45ft">45ft</SelectItem>
@@ -666,8 +672,8 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   </Select>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="assigned_to" className="text-sm font-medium">
+                <div className="space-y-1.5">
+                  <Label htmlFor="assigned_to" className="text-xs font-medium text-[#111827]">
                     Assigned To
                   </Label>
                   <Input
@@ -676,42 +682,43 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     placeholder="Person or email"
                     value={formData.assigned_to}
                     onChange={(e) => handleInputChange('assigned_to', e.target.value)}
+                    className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
           {/* 2️⃣ Demurrage Tracking */}
-          <Card className="border shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <div className="bg-white rounded-md border border-[#E5E7EB] shadow-sm p-4">
+            <div className="mb-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-[#111827] mb-1">
+                <DollarSign className="h-3.5 w-3.5 text-[#2563EB]" />
                 Demurrage Tracking
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center space-x-3">
+              </h3>
+              <p className="text-xs text-[#6B7280] ml-5.5">Optional: Configure demurrage charges</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2.5 pb-3 border-b border-[#E5E7EB]">
                 <input
                   type="checkbox"
                   id="demurrage_enabled"
                   checked={formData.demurrage_enabled}
                   onChange={(e) => handleInputChange('demurrage_enabled', e.target.checked)}
-                  className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  className="h-4 w-4 rounded border-[#D4D7DE] text-[#2563EB] focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 cursor-pointer"
                 />
-                <Label htmlFor="demurrage_enabled" className="text-sm font-medium cursor-pointer">
+                <Label htmlFor="demurrage_enabled" className="text-xs font-medium cursor-pointer text-[#111827]">
                   Enable demurrage tracking
                 </Label>
               </div>
               
               {formData.demurrage_enabled && (
-                <div className="space-y-5 pt-2 border-t">
-                  <div className="space-y-2">
-                    <Label htmlFor="demurrage_flat_rate" className="text-sm font-medium">
+                <div className="space-y-4 pt-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="demurrage_flat_rate" className="text-xs font-medium text-[#111827]">
                       Flat Rate (per day)
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">£</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280] text-xs font-medium">£</span>
                       <Input
                         id="demurrage_flat_rate"
                         type="number"
@@ -719,7 +726,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         onChange={(e) => handleInputChange('demurrage_flat_rate', parseFloat(e.target.value) || 0)}
                         min="0"
                         step="0.01"
-                        className="pl-8"
+                        className="pl-8 h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                         placeholder="0.00"
                       />
                     </div>
@@ -727,9 +734,9 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   
                   {/* Carrier Defaults Info Banner */}
                   {carrierDefaultsLoaded && (
-                    <div className="bg-blue-50/50 border border-blue-200 rounded-md p-3 flex items-center gap-2">
-                      <Info className="h-4 w-4 text-blue-600 shrink-0" />
-                      <span className="text-sm text-blue-700">
+                    <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-md p-2.5 flex items-center gap-2">
+                      <Info className="h-3.5 w-3.5 text-[#2563EB] shrink-0" />
+                      <span className="text-xs text-[#1E40AF]">
                         Loaded tier defaults for {formData.carrier}
                       </span>
                     </div>
@@ -737,9 +744,9 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
 
                   {/* Loading indicator for carrier defaults */}
                   {loadingDefaults && (
-                    <div className="bg-muted/50 border border-border rounded-md p-3 flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                      <span className="text-sm text-muted-foreground">
+                    <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-md p-2.5 flex items-center gap-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#6B7280] shrink-0" />
+                      <span className="text-xs text-[#6B7280]">
                         Loading defaults for {formData.carrier}...
                       </span>
                     </div>
@@ -755,7 +762,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   
                   {/* Quick-save button for both tiers */}
                   {formData.carrier && (
-                    <div className="pt-2 border-t">
+                    <div className="pt-2 border-t border-[#E5E7EB]">
                       <Button
                         variant="outline"
                         size="sm"
@@ -810,36 +817,37 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* 3️⃣ Detention Tracking */}
-          <Card className="border shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Clock className="h-4 w-4 text-muted-foreground" />
+          <div className="bg-white rounded-md border border-[#E5E7EB] shadow-sm p-4">
+            <div className="mb-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-[#111827] mb-1">
+                <Clock className="h-3.5 w-3.5 text-[#2563EB]" />
                 Detention Tracking
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center space-x-3">
+              </h3>
+              <p className="text-xs text-[#6B7280] ml-5.5">Optional: Configure detention charges</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2.5 pb-3 border-b border-[#E5E7EB]">
                 <input
                   type="checkbox"
                   id="detention_enabled"
                   checked={formData.detention_enabled}
                   onChange={(e) => handleInputChange('detention_enabled', e.target.checked)}
-                  className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  className="h-4 w-4 rounded border-[#D4D7DE] text-[#2563EB] focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 cursor-pointer"
                 />
-                <Label htmlFor="detention_enabled" className="text-sm font-medium cursor-pointer">
+                <Label htmlFor="detention_enabled" className="text-xs font-medium cursor-pointer text-[#111827]">
                   Enable detention tracking
                 </Label>
               </div>
               
               {formData.detention_enabled && (
-                <div className="space-y-5 pt-2 border-t">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="gate_out_date" className="text-sm font-medium">
+                <div className="space-y-4 pt-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="gate_out_date" className="text-xs font-medium text-[#111827]">
                         Gate-Out Date
                       </Label>
                       <Input
@@ -847,11 +855,12 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         type="date"
                         value={formData.gate_out_date}
                         onChange={(e) => handleInputChange('gate_out_date', e.target.value)}
+                        className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                       />
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor="empty_return_date" className="text-sm font-medium">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="empty_return_date" className="text-xs font-medium text-[#111827]">
                         Empty Return Date
                       </Label>
                       <Input
@@ -859,16 +868,17 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         type="date"
                         value={formData.empty_return_date}
                         onChange={(e) => handleInputChange('empty_return_date', e.target.value)}
+                        className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                       />
                     </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="detention_flat_rate" className="text-sm font-medium">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detention_flat_rate" className="text-xs font-medium text-[#111827]">
                       Flat Rate (per day)
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">£</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280] text-xs font-medium">£</span>
                       <Input
                         id="detention_flat_rate"
                         type="number"
@@ -876,7 +886,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                         onChange={(e) => handleInputChange('detention_flat_rate', parseFloat(e.target.value) || 0)}
                         min="0"
                         step="0.01"
-                        className="pl-8"
+                        className="pl-8 h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
                         placeholder="0.00"
                       />
                     </div>
@@ -891,54 +901,53 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   />
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* 4️⃣ Additional Notes */}
-          <Card className="border shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <FileText className="h-4 w-4 text-muted-foreground" />
+          <div className="bg-white rounded-md border border-[#E5E7EB] shadow-sm p-4">
+            <div className="mb-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-[#111827] mb-1">
+                <FileText className="h-3.5 w-3.5 text-[#2563EB]" />
                 Additional Notes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="notes" className="text-sm font-medium">
-                  Notes
-                </Label>
-                <textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => handleInputChange('notes', e.target.value)}
-                  rows={4}
-                  className="w-full border border-input rounded-md px-3 py-2 bg-background text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  placeholder="Additional notes about this container..."
-                />
-              </div>
-            </CardContent>
-          </Card>
+              </h3>
+              <p className="text-xs text-[#6B7280] ml-5.5">Any additional information about this container</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="notes" className="text-xs font-medium text-[#111827]">
+                Notes
+              </Label>
+              <textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => handleInputChange('notes', e.target.value)}
+                rows={4}
+                className="w-full border border-[#D4D7DE] rounded-md px-3 py-2 bg-white text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 text-xs"
+                placeholder="Additional notes about this container..."
+              />
+            </div>
+          </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t bg-muted/30">
-          <div className="flex justify-end gap-3">
+        <div className="px-6 py-3 border-t border-[#E5E7EB] bg-white">
+          <div className="flex justify-end gap-2">
             <Button
               variant="outline"
               onClick={handleCancel}
               disabled={isSubmitting}
-              className="min-w-[100px]"
+              className="min-w-[100px] h-8 text-xs border-[#D4D7DE] hover:bg-[#F3F4F6]"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
               disabled={isSubmitting || !formData.container_no || !formData.arrival_date}
-              className="min-w-[140px]"
+              className="min-w-[120px] h-8 text-xs bg-[#2563EB] hover:bg-[#1D4ED8] font-medium"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                   Saving...
                 </>
               ) : (
