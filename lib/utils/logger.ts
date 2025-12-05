@@ -1,5 +1,7 @@
 // /lib/utils/logger.ts
 
+import * as Sentry from "@sentry/nextjs";
+
 type LoggerLevel = 'log' | 'info' | 'debug' | 'warn' | 'error'
 
 export type LoggerPayload = {
@@ -71,6 +73,63 @@ function emit(level: LoggerLevel, input: LoggerInput, context?: unknown) {
           : console.log
 
   consoleMethod(...parts)
+
+  // Capture error-level logs to Sentry
+  if (effectiveLevel === 'error') {
+    let errorToCapture: Error | null = null
+    const extraContext: Record<string, unknown> = {}
+    
+    // First, check if context itself is an Error
+    if (context instanceof Error) {
+      errorToCapture = context
+    } else {
+      // Check payload.context (merged/normalized context)
+      const contextObj = payload.context
+      
+      if (contextObj instanceof Error) {
+        errorToCapture = contextObj
+      } else if (contextObj && typeof contextObj === 'object') {
+        const contextRecord = contextObj as Record<string, unknown>
+        
+        // Check for common error property names
+        if (contextRecord.error instanceof Error) {
+          errorToCapture = contextRecord.error
+        } else if (contextRecord.err instanceof Error) {
+          errorToCapture = contextRecord.err
+        } else if (contextRecord.reason instanceof Error) {
+          errorToCapture = contextRecord.reason
+        }
+        
+        // Collect extra context (excluding the error itself)
+        Object.keys(contextRecord).forEach(key => {
+          const value = contextRecord[key]
+          if (value !== errorToCapture && !(value instanceof Error)) {
+            extraContext[key] = value
+          }
+        })
+      }
+      
+      // Check parts array for Error objects (from console logging)
+      for (const part of parts) {
+        if (part instanceof Error) {
+          errorToCapture = part
+          break
+        }
+      }
+    }
+
+    // If no Error object found, create one from the message
+    if (!errorToCapture) {
+      errorToCapture = payload.message 
+        ? new Error(payload.message)
+        : new Error('Logger captured error with no message')
+    }
+
+    Sentry.captureException(errorToCapture, {
+      tags: { loggerLevel: 'error' },
+      extra: Object.keys(extraContext).length > 0 ? extraContext : undefined,
+    })
+  }
 }
 
 function createLoggerMethod(level: LoggerLevel) {

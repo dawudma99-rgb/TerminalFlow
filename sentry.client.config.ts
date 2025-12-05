@@ -1,23 +1,32 @@
-// This file configures the initialization of Sentry on the client.
-// The added config here will be used whenever a users loads a page in their browser.
+// Sentry configuration for the browser (client) runtime.
+// - DSN and environment are sourced from lib/config/sentry-env.ts
+// - Sampling is environment-aware to avoid 100% tracing in production
+// - Default PII is disabled; user identification must be wired explicitly if needed.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import {
+  NEXT_PUBLIC_SENTRY_DSN,
+  SENTRY_ENVIRONMENT,
+} from "./lib/config/sentry-env";
 
-console.log("[Sentry] sentry.client.config.ts evaluating on client");
+const environment = SENTRY_ENVIRONMENT;
 
+// NOTE: Sampling is environment-aware to avoid 100% tracing in production.
+// Production: 10% of transactions, Non-production: 100% for debugging.
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
+  dsn: NEXT_PUBLIC_SENTRY_DSN || undefined,
+  environment,
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  // In production we only sample 10% of transactions to control volume/cost.
+  // In non-production we sample 100% for easier debugging.
+  tracesSampleRate: environment === "production" ? 0.1 : 1.0,
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
-  // Enable sending user PII (Personally Identifiable Information)
+  // Disable default PII to keep the integration privacy-friendly by default.
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
-  sendDefaultPii: true,
+  sendDefaultPii: false,
 });
 

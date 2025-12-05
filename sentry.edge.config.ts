@@ -1,21 +1,29 @@
-// This file configures the initialization of Sentry for edge features (middleware, edge routes, and so on).
-// The config you add here will be used whenever one of the edge features is loaded.
-// Note that this config is unrelated to the Vercel Edge Runtime and is also required when running locally.
+// Sentry configuration for the Next.js Edge runtime (middleware/edge routes).
+// - DSN and environment are sourced from lib/config/sentry-env.ts
+// - Sampling is environment-aware to avoid 100% tracing in production
+// - Default PII is disabled; edge errors are reported with minimal necessary data.
+// Note: This config is unrelated to the Vercel Edge Runtime and is also required when running locally.
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { SENTRY_DSN, SENTRY_ENVIRONMENT } from "./lib/config/sentry-env";
 
+const environment = SENTRY_ENVIRONMENT;
+
+// NOTE: Sampling is environment-aware to avoid 100% tracing in production.
+// Production: 10% of transactions, Non-production: 100% for debugging.
 Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
+  dsn: SENTRY_DSN || undefined,
+  environment,
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  // In production we only sample 10% of transactions to control volume/cost.
+  // In non-production we sample 100% for easier debugging.
+  tracesSampleRate: environment === "production" ? 0.1 : 1.0,
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
-  // Enable sending user PII (Personally Identifiable Information)
+  // Disable default PII to keep the integration privacy-friendly by default.
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
-  sendDefaultPii: true,
+  sendDefaultPii: false,
 });

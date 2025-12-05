@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { toast } from 'sonner'
 import { logger } from '@/lib/utils/logger'
 
@@ -25,14 +26,19 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
 
       if (isNoiseError) {
         // Silently suppress known noise errors
+        logger.warn({ message: 'Filtered noisy unhandled rejection', reason })
         event.preventDefault()
         return
       }
 
-      // Log in dev mode
-      if (process.env.NODE_ENV === 'development') {
-        logger.warn('[Global Error Boundary] Unhandled promise rejection:', event.reason)
-      }
+      logger.error({ message: 'Unhandled rejection', reason })
+
+      const errToCapture =
+        reason instanceof Error ? reason : new Error(typeof reason === 'string' ? reason : 'Unhandled rejection')
+
+      Sentry.captureException(errToCapture, {
+        tags: { source: 'unhandled-rejection' },
+      })
 
       // Optional: show toast (non-blocking)
       toast.error('A background operation failed — check console for details.')
@@ -44,6 +50,7 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
     const handleWindowError = (event: ErrorEvent) => {
       const message = event.message || ''
       const source = event.filename || ''
+      const rawError = event.error
 
       // Filter out common noise errors
       const isNoiseError =
@@ -55,13 +62,21 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
 
       if (isNoiseError) {
         // Silently suppress known noise errors
+        logger.warn({ message: 'Filtered noisy window error', error: rawError })
         event.preventDefault()
         return
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        logger.warn('[Global Error Boundary] Uncaught error:', event.message)
-      }
+      logger.error({ message: 'Window error', error: rawError, messageText: event.message })
+
+      const errToCapture =
+        rawError instanceof Error
+          ? rawError
+          : new Error(event.message || 'Window error')
+
+      Sentry.captureException(errToCapture, {
+        tags: { source: 'window-error' },
+      })
 
       toast.error('An unexpected client error occurred.')
 

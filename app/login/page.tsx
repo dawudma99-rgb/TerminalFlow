@@ -8,25 +8,39 @@ import { LoaderBar } from '@/components/ui/LoaderBar'
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
+    setErrorMessage(null)
 
     const formData = new FormData(e.currentTarget)
     const email = formData.get("email")?.toString() || ""
     const password = formData.get("password")?.toString() || ""
 
     try {
-      await signIn(email, password)
+      const result = await signIn(email, password)
+
+      if (!result.success) {
+        setIsLoading(false)
+        setErrorMessage(
+          result.error ?? "Unable to sign in. Please try again."
+        )
+        return
+      }
+
+      // success: same as before
       router.push("/dashboard")
       router.refresh()
       // Transition is handled by useAuth on SIGNED_IN event
     } catch (error) {
+      console.error("Unexpected sign-in error", error)
       setIsLoading(false)
-      // Error will be handled by the form action
-      // No transition needed on error
+      setErrorMessage(
+        "Something went wrong while signing in. Please try again."
+      )
     }
   }
 
@@ -38,6 +52,11 @@ export default function LoginPage() {
         className="flex flex-col gap-4 w-full max-w-sm bg-white p-6 rounded-xl shadow"
       >
         <h1 className="text-xl font-semibold text-gray-800">Sign In</h1>
+        {errorMessage && (
+          <p className="text-sm text-red-600">
+            {errorMessage}
+          </p>
+        )}
         <input
           type="email"
           name="email"

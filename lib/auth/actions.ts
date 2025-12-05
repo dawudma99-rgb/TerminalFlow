@@ -2,12 +2,48 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { hitRateLimit } from '@/lib/rate-limit/simpleLimiter'
 
-export async function signIn(email: string, password: string) {
+export type SignInResult = {
+  success: boolean
+  error?: string
+}
+
+export async function signIn(
+  email: string,
+  password: string
+): Promise<SignInResult> {
+  // Basic, best-effort rate limiting to protect against brute-force login attempts.
+  // NOTE: This is in-memory and per-process only. For a real distributed setup,
+  // we can later swap in a Redis/Upstash implementation with the same interface.
+  const emailKey =
+    typeof email === 'string' && email.trim().length > 0
+      ? email.trim().toLowerCase()
+      : 'unknown-email'
+
+  const rateResult = hitRateLimit(`login:email:${emailKey}`, {
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // max 5 attempts per 15 minutes per email
+  })
+
+  if (!rateResult.ok) {
+    return {
+      success: false,
+      error: 'Too many login attempts for this email. Please wait a few minutes and try again.',
+    }
+  }
+
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw new Error(error.message)
+  if (error) {
+    return {
+      success: false,
+      error: 'Invalid email or password.',
+    }
+  }
+
   revalidatePath('/')
+  return { success: true }
 }
 
 export async function signOut() {

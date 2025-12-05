@@ -338,6 +338,61 @@ export async function sendClientEmailForDraft(params: {
     return { ok: false, error: 'User not authenticated' }
   }
 
+  // Validate that the logged-in user has an email address for Reply-To
+  const fromEmail = context.user.email?.trim() ?? ''
+  if (!fromEmail) {
+    return { ok: false, error: 'Your account does not have an email address, so this email cannot be sent.' }
+  }
+
+  // Derive a friendly sender display name
+  let senderName: string | null = null
+
+  // Try profile settings for name (if stored in JSONB settings)
+  const profileSettings = context.profile.settings as any
+  const profileName =
+    profileSettings?.full_name ??
+    profileSettings?.name ??
+    null
+
+  if (typeof profileName === 'string' && profileName.trim()) {
+    senderName = profileName.trim()
+  }
+
+  // Fallback to auth user metadata (if available)
+  if (!senderName) {
+    const metaName =
+      (context.user.user_metadata as any)?.full_name ??
+      (context.user.user_metadata as any)?.name ??
+      null
+
+    if (typeof metaName === 'string' && metaName.trim()) {
+      senderName = metaName.trim()
+    }
+  }
+
+  // Fallback to the local-part of the email (before @)
+  if (!senderName) {
+    const localPart = fromEmail.split('@')[0] ?? ''
+    if (localPart) {
+      // Simple humanization: replace dots/underscores with spaces and capitalize first letter
+      const prettyLocal =
+        localPart
+          .replace(/[._]+/g, ' ')
+          .trim()
+          .replace(/^./, (c) => c.toUpperCase()) || localPart
+
+      senderName = prettyLocal
+    }
+  }
+
+  // Final fallback
+  if (!senderName) {
+    senderName = 'TerminalFlow Alerts'
+  }
+
+  // At this point, senderName is guaranteed to be a string
+  const finalSenderName: string = senderName
+
   // Fetch the draft to verify it exists and belongs to the org
   const { data: draft, error: fetchError } = await supabase
     .from('email_drafts')
@@ -387,6 +442,8 @@ export async function sendClientEmailForDraft(params: {
       subject,
       text: bodyText,
       html: bodyHtml || undefined,
+      replyTo: fromEmail, // Replies go to the logged-in user
+      fromName: finalSenderName, // Makes it look like it's from the user
     })
 
     if (!emailResult.success) {

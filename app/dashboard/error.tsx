@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+import * as Sentry from "@sentry/nextjs"
 import { logger } from '@/lib/utils/logger'
 import { Button } from '@/components/ui/button'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -12,6 +14,13 @@ export default function DashboardError({
   reset: () => void
 }) {
   logger.error('🚨 [DashboardError] Dashboard failed:', error)
+
+  useEffect(() => {
+    if (!error) return
+    Sentry.captureException(error, {
+      tags: { boundary: 'dashboard-error' },
+    })
+  }, [error])
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6 p-8">

@@ -71,4 +71,9 @@ module.exports = withSentryConfig(nextConfig, {
   org: "terminalflow",
   project: "javascript-nextjs",
   silent: true,
+  // NOTE:
+  // This org + project must match the Sentry project where DSNs are taken from.
+  // Ensure the SENTRY_AUTH_TOKEN (used by sentry-cli in CI/CD) belongs to this
+  // org/project, otherwise source maps and events may be associated with a
+  // different Sentry project than the one the app is configured to use.
 });
