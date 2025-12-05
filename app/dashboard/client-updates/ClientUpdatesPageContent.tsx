@@ -14,6 +14,7 @@ import {
   type EmailDraftWithContainer,
   type ClientEmailEventType,
   type EmailDraftRow,
+  type DigestTimeWindow,
 } from '@/lib/data/email-drafts-actions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -55,7 +56,13 @@ type DraftMetadata = {
 }
 
 const EVENT_LABELS: Record<ClientEmailEventType, string> = {
-  daily_digest: 'Daily digest',
+  daily_digest: 'Digest',
+}
+
+const DIGEST_TIMEWINDOW_LABELS: Record<DigestTimeWindow, string> = {
+  all: 'All time',
+  last_24_hours: 'Last 24 hours',
+  last_3_days: 'Last 3 days',
 }
 
 function formatDateTime(value?: string | null): string {
@@ -82,7 +89,7 @@ function formatDate(date: Date): string {
 function getEventTypeLabel(eventType: string): string {
   switch (eventType) {
     case 'daily_digest':
-      return 'Daily Digest'
+      return 'Digest'
     case 'became_overdue':
       return 'Overdue Alert'
     case 'detention_started':
@@ -145,6 +152,7 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
   const [isApproving, startApproving] = useTransition()
   const [isGenerating, startGenerating] = useTransition()
   const [sendingDraftId, setSendingDraftId] = useState<string | null>(null)
+  const [timeWindow, setTimeWindow] = useState<DigestTimeWindow>('all')
 
   // Form state for edit dialog
   const [toEmail, setToEmail] = useState('')
@@ -235,39 +243,43 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
     startGenerating(async () => {
       try {
         let result
+        const windowLabel = DIGEST_TIMEWINDOW_LABELS[timeWindow]
 
         if (choice.mode === 'all') {
-          result = await createDailyDigestDraftsForToday()
+          result = await createDailyDigestDraftsForToday({ timeWindow })
         } else {
-          result = await createDailyDigestDraftsForToday({ listId: choice.listId })
+          result = await createDailyDigestDraftsForToday({
+            listId: choice.listId,
+            timeWindow,
+          })
         }
 
         const createdCount = result?.created ?? 0
 
         if (createdCount > 0) {
           if (choice.mode === 'all') {
-            toast.success(`Created ${createdCount} daily digest draft(s) across all lists.`)
+            toast.success(`Created ${createdCount} digest draft(s) across all lists.`)
           } else {
             const name = choice.listName ?? 'this list'
-            toast.success(`Created ${createdCount} daily digest draft(s) for ${name}.`)
+            toast.success(`Created ${createdCount} digest draft(s) for ${name}.`)
           }
         } else {
           if (choice.mode === 'all') {
-            toast.info('No digests created – no lists have containers in warning/overdue/detention today.')
+            toast.info(`No digests created – no lists have containers in warning/overdue/detention in the selected time window (${windowLabel}).`)
           } else {
             const name = choice.listName ?? 'this list'
-            toast.info(`No digest created for ${name} – no containers in warning/overdue/detention today.`)
+            toast.info(`No digest created for ${name} – no containers in warning/overdue/detention in the selected time window (${windowLabel}).`)
           }
         }
 
         router.refresh()
       } catch (err) {
-        console.error('Failed to generate daily digests', err)
+        console.error('Failed to generate digests', err)
         if (choice.mode === 'all') {
-          toast.error('Failed to generate daily digests. Please try again.')
+          toast.error('Failed to generate digests. Please try again.')
         } else {
           const name = choice.listName ?? 'this list'
-          toast.error(`Failed to generate daily digest for ${name}. Please try again.`)
+          toast.error(`Failed to generate digest for ${name}. Please try again.`)
         }
       }
     })
@@ -287,16 +299,30 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
         </span>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold tracking-tight text-[#1F2937]">Client Updates</h1>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                disabled={isGenerating || !lists || lists.length === 0}
-                className="border-[#D4D7DE] text-slate-600 hover:bg-[#EEF1F6]"
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              Time window:
+              <select
+                value={timeWindow}
+                onChange={(e) => setTimeWindow(e.target.value as DigestTimeWindow)}
+                className="rounded-md border border-[#D4D7DE] px-2 py-1 text-sm bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isGenerating}
               >
-                {isGenerating ? 'Generating…' : 'Generate daily digests'}
-              </Button>
-            </DropdownMenuTrigger>
+                <option value="all">All time</option>
+                <option value="last_24_hours">Last 24 hours</option>
+                <option value="last_3_days">Last 3 days</option>
+              </select>
+            </label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={isGenerating || !lists || lists.length === 0}
+                  className="border-[#D4D7DE] text-slate-600 hover:bg-[#EEF1F6]"
+                >
+                  {isGenerating ? 'Generating…' : 'Generate digests'}
+                </Button>
+              </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Choose client list</DropdownMenuLabel>
               <DropdownMenuItem
@@ -325,9 +351,10 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
         <p className="text-sm text-[#6B7280] mt-1">
-          Review and send daily digest emails to your clients. Generate digests to see today&apos;s alerts grouped by client list.
+          Review and send digest emails to your clients. Generate digests to see container alerts grouped by client list for the selected time window.
         </p>
       </header>
 
@@ -429,7 +456,7 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                          Daily digest
+                          Digest
                         </span>
                       </TableCell>
                       <TableCell className="max-w-sm">
@@ -605,7 +632,7 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Type:</span>
                     <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                      Daily digest
+                      Digest
                     </span>
                   </div>
                   {(selectedDraft.draft.metadata as DraftMetadata)?.list_name && (

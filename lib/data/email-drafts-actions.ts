@@ -14,6 +14,8 @@ type ContainerRow = Database['public']['Tables']['containers']['Row']
 type EmailDraftStatus = Database['public']['Tables']['email_drafts']['Row']['status']
 type ListRow = Database['public']['Tables']['container_lists']['Row']
 
+export type DigestTimeWindow = 'all' | 'last_24_hours' | 'last_3_days'
+
 async function resolveOrgContext(): Promise<{
   supabase: Awaited<ReturnType<typeof createClient>>
   context: ServerAuthContext | null
@@ -559,19 +561,40 @@ async function fetchContainersForListWithDerived(params: {
   supabase: Awaited<ReturnType<typeof createClient>>
   organizationId: string
   listId: string
+  timeWindow?: DigestTimeWindow
 }): Promise<Array<{ raw: ContainerRow; derived: ContainerWithDerivedFields }>> {
-  const { supabase, organizationId, listId } = params
+  const { supabase, organizationId, listId, timeWindow = 'all' } = params
 
-  const { data, error } = await supabase
+  // Compute an optional cutoff ISO string based on timeWindow
+  let cutoffIso: string | null = null
+  if (timeWindow === 'last_24_hours') {
+    const cutoff = new Date()
+    cutoff.setHours(cutoff.getHours() - 24)
+    cutoffIso = cutoff.toISOString()
+  } else if (timeWindow === 'last_3_days') {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 3)
+    cutoffIso = cutoff.toISOString()
+  }
+
+  // Build the Supabase query
+  let query = supabase
     .from('containers')
     .select('*')
     .eq('organization_id', organizationId)
     .eq('list_id', listId)
 
+  if (cutoffIso) {
+    query = query.gte('updated_at', cutoffIso)
+  }
+
+  const { data, error } = await query
+
   if (error) {
     logger.error('[email-drafts-actions] fetchContainersForListWithDerived error', {
       organization_id: organizationId,
       list_id: listId,
+      time_window: timeWindow,
       error: error.message,
     })
     return []
@@ -591,57 +614,22 @@ async function fetchContainersForListWithDerived(params: {
 }
 
 /**
- * Check if a digest draft for a given list already exists today.
- * Uses UTC date range to determine "today".
- */
-async function hasDigestDraftForListToday(params: {
-  supabase: Awaited<ReturnType<typeof createClient>>
-  organizationId: string
-  listId: string
-}): Promise<boolean> {
-  const { supabase, organizationId, listId } = params
-
-  // We treat "today" in UTC
-  const today = new Date()
-  const isoDate = today.toISOString().split('T')[0] // "YYYY-MM-DD"
-
-  // Query for existing digest draft using metadata->>list_id JSON path
-  // We use a filter to check the JSONB field directly
-  const { data, error } = await supabase
-    .from('email_drafts')
-    .select('id')
-    .eq('organization_id', organizationId)
-    .eq('event_type', 'daily_digest')
-    .gte('generated_at', `${isoDate}T00:00:00.000Z`)
-    .lte('generated_at', `${isoDate}T23:59:59.999Z`)
-    .filter('metadata->>list_id', 'eq', listId)
-    .limit(1)
-
-  if (error) {
-    logger.error('[email-drafts-actions] hasDigestDraftForListToday error', {
-      list_id: listId,
-      organization_id: organizationId,
-      error: error.message,
-    })
-    return false
-  }
-
-  return (data?.length ?? 0) > 0
-}
-
-/**
  * Create daily digest email drafts for all lists in the current organization.
  * 
  * For each list:
  * - Fetches containers for that list and computes derived fields
  * - Builds digest content using buildDailyDigestForList (container-state-based)
  * - Creates an email_draft row with event_type = 'daily_digest'
- * - Skips lists with no containers in relevant states or if a digest already exists today
+ * - Skips lists with no containers in relevant states
+ * 
+ * Note: Every invocation can create a new digest draft, even if one already exists
+ * for the same list. There is no per-day-per-list restriction.
  * 
  * @returns { created: number } - Number of digest drafts created
  */
 export async function createDailyDigestDraftsForToday(params?: {
   listId?: string | null
+  timeWindow?: DigestTimeWindow
 }): Promise<{
   created: number
 }> {
@@ -661,6 +649,7 @@ export async function createDailyDigestDraftsForToday(params?: {
   const lists = await fetchListsForOrg(supabase, organizationId)
 
   const requestedListId = params?.listId ?? null
+  const timeWindow: DigestTimeWindow = params?.timeWindow ?? 'all'
   const listsToProcess = requestedListId
     ? lists.filter((l) => l.id === requestedListId)
     : lists
@@ -679,6 +668,7 @@ export async function createDailyDigestDraftsForToday(params?: {
     list_count: lists.length,
     requested_list_id: requestedListId,
     lists_to_process: listsToProcess.length,
+    time_window: timeWindow,
     lists: lists.map((l) => ({ id: l.id, name: l.name })),
   })
 
@@ -691,29 +681,20 @@ export async function createDailyDigestDraftsForToday(params?: {
     logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Processing list', {
       list_id: list.id,
       list_name: list.name,
+      time_window: timeWindow,
     })
 
-    // 2) Avoid creating multiple digests for same list+day
-    const alreadyExists = await hasDigestDraftForListToday({
-      supabase,
-      organizationId,
-      listId: list.id,
-    })
+    // Note: We intentionally no longer enforce "one digest per list per day".
+    // Every invocation can create a new digest draft for lists that have containers
+    // in warning/overdue/detention/closed-today buckets.
 
-    if (alreadyExists) {
-      logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Digest already exists, skipping list', {
-        list_id: list.id,
-        list_name: list.name,
-      })
-      continue
-    }
-
-    // 3) Fetch containers for this list with derived fields
+    // 2) Fetch containers for this list with derived fields
     try {
       const enriched = await fetchContainersForListWithDerived({
         supabase,
         organizationId,
         listId: list.id,
+        timeWindow,
       })
 
       logger.debug('[email-drafts-actions] createDailyDigestDraftsForToday: Containers fetched for list', {
@@ -759,6 +740,7 @@ export async function createDailyDigestDraftsForToday(params?: {
         listName: list.name ?? 'Unnamed list',
         containers,
         organizationName,
+        timeWindow,
       })
 
       if (!digest) {
@@ -782,8 +764,10 @@ export async function createDailyDigestDraftsForToday(params?: {
         generated_from: 'daily_digest',
       }
 
+      // Note: We currently only persist plain-text body_text.
+      // The production email_drafts table does not have a body_html column yet.
+      // HTML is generated in the formatter but not stored until we add a DB migration.
       // Type assertion needed: container_id is nullable in DB but types haven't been regenerated
-      // body_html is optional field (we'll add to DB separately)
       const { error } = await supabase.from('email_drafts').insert({
         organization_id: organizationId,
         container_id: null as any, // this is a list-level digest (nullable in DB)
@@ -792,7 +776,6 @@ export async function createDailyDigestDraftsForToday(params?: {
         to_email: null, // forwarder will fill this in
         subject: digest.subject,
         body_text: digest.bodyText,
-        body_html: (digest.bodyHtml || null) as any, // Store HTML if available
         metadata,
         created_by_user_id: userId,
         approved_by_user_id: null,
@@ -804,7 +787,10 @@ export async function createDailyDigestDraftsForToday(params?: {
           list_id: list.id,
           list_name: list.name,
           organization_id: organizationId,
-          error: error.message,
+          error_message: error.message,
+          error_code: (error as any).code ?? null,
+          error_details: (error as any).details ?? null,
+          error_hint: (error as any).hint ?? null,
         })
         continue
       }

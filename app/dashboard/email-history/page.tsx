@@ -17,7 +17,7 @@ function formatDate(date: Date): string {
 function getEventTypeLabel(eventType: string): string {
   switch (eventType) {
     case 'daily_digest':
-      return 'Daily Digest'
+      return 'Digest'
     case 'became_overdue':
       return 'Overdue Alert'
     case 'detention_started':

@@ -24,7 +24,7 @@ export function QuickActionsCard({ className }: QuickActionsCardProps) {
       if (result?.created > 0) {
         toast.success(`Created ${result.created} daily digest draft(s)`)
       } else {
-        toast.info('No digests created – no containers in warning/overdue/detention today.')
+        toast.info('No digests created – no lists have containers in warning/overdue/detention recently.')
       }
       router.refresh()
     } catch (err) {

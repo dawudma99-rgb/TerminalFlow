@@ -1,7 +1,7 @@
 import type { Database } from '@/types/database'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
-import { getTodayUtcRange } from '@/lib/utils/date-range'
 import { logger } from '@/lib/utils/logger'
+import type { DigestTimeWindow } from '@/lib/data/email-drafts-actions'
 
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
@@ -9,16 +9,14 @@ export function buildDailyDigestForList(params: {
   listName: string
   containers: ContainerRow[]
   organizationName?: string | null
+  timeWindow: DigestTimeWindow
 }): { subject: string; bodyText: string; bodyHtml: string } | null {
-  const { listName, containers, organizationName } = params
+  const { listName, containers, organizationName, timeWindow } = params
 
   // No containers → return null so caller can skip creating a digest
   if (!containers || containers.length === 0) {
     return null
   }
-
-  const now = new Date()
-  const { start } = getTodayUtcRange()
 
   // Compute derived fields for each container
   const enriched = containers.map((c) => ({
@@ -32,22 +30,15 @@ export function buildDailyDigestForList(params: {
   const detention = enriched.filter(
     (e) => (e.derived.detention_chargeable_days ?? 0) > 0
   )
-  const closedToday = enriched.filter((e) => {
-    if (!e.raw.is_closed) return false
-    const updated = e.raw.updated_at ? new Date(e.raw.updated_at) : null
-    if (!updated) return false
-    // Use UTC day comparison: same UTC date as "start" (start-of-today-UTC)
-    return (
-      updated.getUTCFullYear() === start.getUTCFullYear() &&
-      updated.getUTCMonth() === start.getUTCMonth() &&
-      updated.getUTCDate() === start.getUTCDate()
-    )
-  })
+  // Closed containers: any container in the fetched set that is closed
+  // The query layer already filters by updated_at when timeWindow is not 'all',
+  // so we only need to check is_closed here
+  const closed = enriched.filter((e) => e.raw.is_closed)
 
   const overdueCount = overdue.length
   const warningCount = warning.length
   const detentionCount = detention.length
-  const closedCount = closedToday.length
+  const closedCount = closed.length
 
   logger.debug('[dailyDigestFormatter] buildDailyDigestForList: Bucket counts', {
     listName,
@@ -63,14 +54,24 @@ export function buildDailyDigestForList(params: {
     overdue.length === 0 &&
     warning.length === 0 &&
     detention.length === 0 &&
-    closedToday.length === 0
+    closed.length === 0
   ) {
     return null
   }
 
   // ---- SUBJECT ----
 
-  const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+  function getTimeWindowLabel(timeWindow: DigestTimeWindow): string {
+    switch (timeWindow) {
+      case 'last_24_hours':
+        return 'last 24 hours'
+      case 'last_3_days':
+        return 'last 3 days'
+      case 'all':
+      default:
+        return 'all activity'
+    }
+  }
 
   // Build optional counts for subject
   const subjectCounts: string[] = []
@@ -79,7 +80,8 @@ export function buildDailyDigestForList(params: {
 
   const countsText = subjectCounts.length > 0 ? ` (${subjectCounts.join(', ')})` : ''
 
-  const subject = `Daily container update – ${listName} – ${today}${countsText}`
+  const windowLabel = getTimeWindowLabel(timeWindow)
+  const subject = `Container update – ${listName} (${windowLabel})${countsText}`
 
   // ---- BODY ----
 
@@ -119,7 +121,7 @@ export function buildDailyDigestForList(params: {
           <!-- Header -->
           <tr>
             <td style="padding: 30px 40px 20px 40px; background-color: #ffffff;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">Daily container update – ${escapeHtml(listName)}</h1>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">Container update – ${escapeHtml(listName)}</h1>
             </td>
           </tr>
           
@@ -130,7 +132,7 @@ export function buildDailyDigestForList(params: {
                 Hi,
               </p>
               <p style="margin: 0 0 0 0; font-size: 15px; line-height: 1.6; color: #374151;">
-                Here's today's overview of your active containers. We've highlighted urgent and at-risk containers so you can act early and avoid charges.
+                Here's an overview of your active containers. We've highlighted urgent and at-risk containers so you can act early and avoid charges.
               </p>
             </td>
           </tr>
@@ -177,7 +179,7 @@ export function buildDailyDigestForList(params: {
       htmlParts.push(`
         <tr>
           <td style="padding: 4px 0; font-size: 14px; color: #374151;">
-            <strong style="color: #059669;">${closedCount}</strong> closed today
+            <strong style="color: #059669;">${closedCount}</strong> closed container${closedCount !== 1 ? 's' : ''}
           </td>
         </tr>
       `)
@@ -310,12 +312,12 @@ export function buildDailyDigestForList(params: {
     `)
   }
 
-  // Closed today section
-  if (closedToday.length > 0) {
+  // Closed containers section
+  if (closed.length > 0) {
     htmlParts.push(`
           <tr>
             <td style="padding: 0 40px 20px 40px;">
-              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #059669;">Closed today</h2>
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: #059669;">Closed containers</h2>
               <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid #e5e7eb;">
                   <th style="text-align: left; padding: 10px 0; font-size: 13px; font-weight: 600; color: #6b7280;">Container</th>
@@ -323,10 +325,10 @@ export function buildDailyDigestForList(params: {
                 </tr>
     `)
     
-    for (const { raw } of closedToday) {
+    for (const { raw } of closed) {
       const { container_no, port } = getContainerDisplay(raw)
       const updatedDate = formatDate(raw.updated_at)
-      const displayText = updatedDate ? `Closed on ${updatedDate}` : 'Closed today'
+      const displayText = updatedDate ? `Closed on ${updatedDate}` : 'Closed'
       
       htmlParts.push(`
                 <tr style="border-bottom: 1px solid #f3f4f6;">
@@ -376,17 +378,17 @@ export function buildDailyDigestForList(params: {
   // Build plain text version
   const lines: string[] = []
 
-  lines.push(`Daily container update – ${listName}`)
+  lines.push(`Container update – ${listName}`)
   lines.push('')
   lines.push('Hi,')
   lines.push('')
-  lines.push("Here's today's overview of your active containers. We've highlighted urgent and at-risk containers so you can act early and avoid charges.")
+  lines.push("Here's an overview of your active containers. We've highlighted urgent and at-risk containers so you can act early and avoid charges.")
   lines.push('')
   lines.push('Summary:')
   if (overdueCount > 0) lines.push(`- ${overdueCount} overdue container${overdueCount !== 1 ? 's' : ''}`)
   if (detentionCount > 0) lines.push(`- ${detentionCount} in detention`)
   if (warningCount > 0) lines.push(`- ${warningCount} at risk (free time ending soon)`)
-  if (closedCount > 0) lines.push(`- ${closedCount} closed today`)
+  if (closedCount > 0) lines.push(`- ${closedCount} closed container${closedCount !== 1 ? 's' : ''}`)
   lines.push('')
 
   if (overdue.length > 0) {
@@ -428,12 +430,12 @@ export function buildDailyDigestForList(params: {
     lines.push('')
   }
 
-  if (closedToday.length > 0) {
-    lines.push('Closed today:')
-    for (const { raw } of closedToday) {
+  if (closed.length > 0) {
+    lines.push('Closed containers:')
+    for (const { raw } of closed) {
       const { container_no, port } = getContainerDisplay(raw)
       const updatedDate = formatDate(raw.updated_at)
-      const displayText = updatedDate ? `Closed on ${updatedDate}` : 'Closed today'
+      const displayText = updatedDate ? `Closed on ${updatedDate}` : 'Closed'
       lines.push(`  ${container_no}${port ? ` (${port})` : ''} – ${displayText}`)
     }
     lines.push('')

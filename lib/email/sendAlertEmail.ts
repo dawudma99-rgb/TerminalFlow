@@ -51,7 +51,7 @@ export async function sendAlertEmail(params: {
       subject: string
       text: string
       html?: string
-      reply_to?: string
+      replyTo?: string
     } = {
       from: fromAddress,
       to,
@@ -64,7 +64,7 @@ export async function sendAlertEmail(params: {
     }
 
     if (replyTo && replyTo.trim().length > 0) {
-      emailData.reply_to = replyTo.trim()
+      emailData.replyTo = replyTo.trim()
     }
 
     const { data, error } = await resend.emails.send(emailData)
