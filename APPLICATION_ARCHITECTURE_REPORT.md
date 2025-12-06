@@ -15,12 +15,13 @@
 4. [Database Schema](#database-schema)
 5. [Authentication & Security](#authentication--security)
 6. [Core Features & Business Logic](#core-features--business-logic)
-7. [State Management](#state-management)
-8. [Data Flow](#data-flow)
-9. [Key Components](#key-components)
-10. [API Routes](#api-routes)
-11. [File Structure](#file-structure)
-12. [Development Workflow](#development-workflow)
+7. [Error Monitoring & Observability (Sentry)](#7-error-monitoring--observability-sentry)
+8. [State Management](#state-management)
+9. [Data Flow](#data-flow)
+10. [Key Components](#key-components)
+11. [API Routes](#api-routes)
+12. [File Structure](#file-structure)
+13. [Development Workflow](#development-workflow)
 
 ---
 
@@ -79,6 +80,12 @@
 
 ### Email
 - **Resend 6.5.0** (email delivery)
+
+### Error Monitoring & Observability
+- **Sentry 10.28.0** (`@sentry/nextjs`)
+  - Client, server, and edge runtime support
+  - Automatic error tracking and performance monitoring
+  - Integrated with logger utility
 
 ### Utilities
 - **Zod 4.1.12** (validation)
@@ -582,14 +589,38 @@ USING (
 - `lib/email/dailyDigestFormatter.ts` - Daily digest content generation
 - `lib/data/alerts-logic.ts` - Alert creation (no longer creates email drafts)
 
-**Email Service:** `sendAlertEmail()`
-- Uses Resend SDK (v6.5.0)
-- FROM: `process.env.EMAIL_FROM` or `alerts@terminalflow.app`
-- Format: "TerminalFlow Alerts <email>"
-- Plain text emails (mobile-friendly)
-- Returns: `{ success: boolean, error?: string }`
+### Email Service: `sendAlertEmail()`
 
-**Email Draft System:**
+**File:** `lib/email/sendAlertEmail.ts`
+
+**Implementation:**
+- Uses Resend SDK (v6.5.0) - server-only function (`'use server'`)
+- FROM: `process.env.EMAIL_FROM` or defaults to `alerts@terminalflow.app`
+- Format: "TerminalFlow Alerts <email>" (customizable via `fromName` parameter)
+- Supports plain text and optional HTML email bodies
+- Supports `replyTo` address for client replies
+- Returns: `{ success: boolean, error?: string }`
+- Non-blocking error handling (errors logged, not thrown)
+
+**Parameters:**
+```typescript
+{
+  to: string | string[]  // Single or multiple recipients
+  subject: string
+  text: string           // Plain text body (required)
+  html?: string          // Optional HTML body
+  replyTo?: string       // Optional reply-to address
+  fromName?: string      // Optional custom from name
+}
+```
+
+**Error Handling:**
+- Checks for `RESEND_API_KEY` environment variable
+- Logs errors via `logger.error()` (which sends to Sentry)
+- Returns error status without throwing exceptions
+- Development mode logs successful sends for debugging
+
+### Email Draft System
 
 The app uses a **draft-based approval workflow** for all client emails:
 
@@ -599,45 +630,73 @@ The app uses a **draft-based approval workflow** for all client emails:
 4. **Approval:** Forwarders mark drafts as ready (`approved_by_user_id` set)
 5. **Sending:** Forwarders send approved drafts via "Send now" button
 
-**Daily Digest System:**
+### Daily Digest System
 
 **How It Works:**
 - **Manual Trigger:** User clicks "Generate daily digests" button on `/dashboard/client-updates`
 - **Function:** `createDailyDigestDraftsForToday()` in `lib/data/email-drafts-actions.ts`
+- **Time Windows:** Supports `'all'`, `'last_24_hours'`, or `'last_3_days'` (via `DigestTimeWindow` type)
 - **Process:**
   1. Fetches all lists for current organization
-  2. For each list, fetches today's alerts using `fetchAlertsForListToday()`
-  3. Groups alerts by event type (became_warning, became_overdue, detention_started, container_closed)
-  4. Builds digest content via `buildDailyDigestForList()` formatter
-  5. Creates one `email_drafts` row per list with:
+  2. For each list, fetches alerts based on selected time window using `fetchAlertsForListToday()`
+  3. Fetches containers associated with those alerts
+  4. Computes derived fields for each container (status, fees, detention info)
+  5. Groups containers into buckets:
+     - **Overdue:** Containers with `status = 'Overdue'`
+     - **Warning:** Containers with `status = 'Warning'`
+     - **Detention:** Containers with `detention_chargeable_days > 0`
+     - **Closed:** Containers with `is_closed = true`
+  6. Builds digest content via `buildDailyDigestForList()` formatter
+  7. Creates one `email_drafts` row per list with:
      - `event_type = 'daily_digest'`
      - `container_id = null` (list-level, not container-specific)
      - `status = 'pending'`
      - `to_email = null` (user must enter)
-     - `metadata` contains `list_id` and `list_name`
-  6. Skips lists with no alerts or if digest already exists today
+     - `metadata` contains `list_id`, `list_name`, and alert summary
+  8. Skips lists with no alerts or if digest already exists today
+
+**Digest Content Formatting:**
+
+**File:** `lib/email/dailyDigestFormatter.ts` - `buildDailyDigestForList()`
+
+**Output:**
+- **Subject:** Auto-generated based on container counts (e.g., "Daily Digest: 5 Overdue, 3 Warning")
+- **Body Text:** Plain text format with:
+  - Summary counts for each bucket
+  - Detailed list of containers in each category
+  - Container numbers, ports, days left, fees
+  - Links to dashboard alerts page
+- **Body HTML:** HTML version with same content (for rich email clients)
 
 **Draft Fields:**
 - `organization_id` - Tenant isolation
 - `container_id` - NULL for digest drafts (list-level)
 - `event_type` - `'daily_digest'` (only active event type)
 - `status` - `'pending'`, `'sent'`, or `'skipped'`
-- `to_email` - Recipient email (user-entered)
+- `to_email` - Recipient email (user-entered, nullable)
 - `subject` - Auto-generated digest subject
-- `body_text` - Auto-generated digest body
+- `body_text` - Auto-generated digest body (plain text)
 - `metadata` - JSONB with list info and alert summary
 - `approved_by_user_id` - User who approved (required before sending)
+- `generated_at` - Timestamp when draft was created
+- `sent_at` - Timestamp when email was sent (nullable)
+- `last_error` - Last send error message (nullable)
 
 **Sending Process:**
 1. User edits draft (enters `to_email`, can modify subject/body)
 2. User approves draft (sets `approved_by_user_id`)
 3. User clicks "Send now" → calls `sendClientEmailForDraft()`
 4. Validates: draft is pending, approved, and has recipient email
-5. Calls `sendAlertEmail()` via Resend
+5. Calls `sendAlertEmail()` via Resend with:
+   - `to`: Draft's `to_email`
+   - `subject`: Draft's `subject`
+   - `text`: Draft's `body_text`
+   - `html`: Optional HTML version (if available)
+   - `replyTo`: Can be configured per organization
 6. On success: Updates `status = 'sent'`, sets `sent_at`
 7. On failure: Updates `last_error`, keeps status as 'pending' for retry
 
-**Alert Creation (No Email Drafts):**
+### Alert Creation (No Email Drafts)
 
 **File:** `lib/data/alerts-logic.ts` - `createAlertsForContainerChange()`
 
@@ -659,7 +718,169 @@ The app uses a **draft-based approval workflow** for all client emails:
 
 ---
 
-### 7. Multi-List Management
+### 7. Error Monitoring & Observability (Sentry)
+
+**Files:**
+- `sentry.client.config.ts` - Client-side Sentry initialization
+- `sentry.server.config.ts` - Server-side Sentry initialization
+- `sentry.edge.config.ts` - Edge runtime (middleware) Sentry initialization
+- `lib/config/sentry-env.ts` - Centralized Sentry environment configuration
+- `instrumentation.ts` - Next.js instrumentation hook
+- `lib/utils/logger.ts` - Logger utility with Sentry integration
+- `app/error-boundary.tsx` - Global error boundary with Sentry (unhandled rejections/window errors)
+- `app/dashboard/error.tsx` - Route-level error boundary
+- `next.config.js` - Sentry build configuration
+
+### Sentry Configuration
+
+**SDK Version:** `@sentry/nextjs@^10.28.0`
+
+**Runtime Support:**
+- ✅ **Client (Browser):** `sentry.client.config.ts`
+- ✅ **Server (Node.js):** `sentry.server.config.ts`
+- ✅ **Edge (Middleware):** `sentry.edge.config.ts`
+
+**Environment Variables:**
+- `SENTRY_DSN` - DSN for server/edge runtimes
+- `NEXT_PUBLIC_SENTRY_DSN` - DSN for browser/client runtime
+- `SENTRY_ENVIRONMENT` - Optional environment name (defaults to `NODE_ENV`)
+
+**Configuration Details:**
+
+**Client Runtime (`sentry.client.config.ts`):**
+- DSN sourced from `lib/config/sentry-env.ts` → `NEXT_PUBLIC_SENTRY_DSN`
+- Environment-aware sampling:
+  - Production: 10% of transactions (`tracesSampleRate: 0.1`)
+  - Non-production: 100% of transactions (`tracesSampleRate: 1.0`)
+- `sendDefaultPii: false` - Privacy-friendly (no automatic PII collection)
+- `enableLogs: true` - Logs sent to Sentry
+
+**Server Runtime (`sentry.server.config.ts`):**
+- DSN sourced from `lib/config/sentry-env.ts` → `SENTRY_DSN`
+- Same sampling strategy as client
+- `sendDefaultPii: false` - Privacy-friendly
+- `enableLogs: true` - Logs sent to Sentry
+
+**Edge Runtime (`sentry.edge.config.ts`):**
+- DSN sourced from `lib/config/sentry-env.ts` → `SENTRY_DSN`
+- Same sampling strategy as client/server
+- `sendDefaultPii: false` - Privacy-friendly
+- `enableLogs: true` - Logs sent to Sentry
+
+**Build Configuration (`next.config.js`):**
+- Wrapped with `withSentryConfig()` from `@sentry/nextjs`
+- Organization: `terminalflow`
+- Project: `javascript-nextjs`
+- Silent mode enabled (reduces build output noise)
+- Source maps automatically uploaded during build
+
+**Content Security Policy:**
+- Sentry domains added to CSP `connect-src`:
+  - `https://*.sentry.io`
+  - `https://*.ingest.sentry.io`
+  - `https://*.ingest.de.sentry.io`
+
+### Logger Integration
+
+**File:** `lib/utils/logger.ts`
+
+**Sentry Integration:**
+- Error-level logs automatically sent to Sentry via `Sentry.captureException()`
+- Extracts Error objects from context automatically
+- Adds tags: `{ loggerLevel: 'error' }`
+- Includes extra context (non-error data) in Sentry events
+- Smart error extraction:
+  - Checks context for Error objects
+  - Checks payload.context for Error objects
+  - Looks for common error property names (`error`, `err`, `reason`)
+  - Creates Error from message if no Error object found
+
+**Logger Methods:**
+- `logger.log()` - Development only
+- `logger.info()` - Development only
+- `logger.debug()` - Development only
+- `logger.warn()` - Development only
+- `logger.error()` - Always logs + sends to Sentry
+- `logger.time()` / `logger.timeEnd()` - Performance timing (dev only)
+
+**Usage Pattern:**
+```typescript
+import { logger } from '@/lib/utils/logger'
+
+// Error logging (automatically sent to Sentry)
+logger.error('Failed to fetch containers', { 
+  containerId, 
+  error: err 
+})
+
+// Debug logging (development only)
+logger.debug('Container fetched', { containerId })
+```
+
+### Error Boundaries
+
+**Global Error Boundary (`app/error-boundary.tsx`):**
+- Catches unhandled promise rejections
+- Catches window errors
+- Filters noise errors (Fast Refresh, ChunkLoadError, ResizeObserver, etc.)
+- Sends filtered errors to Sentry with tags:
+  - `{ source: 'unhandled-rejection' }` for promise rejections
+  - `{ source: 'window-error' }` for window errors
+- Shows user-friendly toast notifications
+- Prevents default browser error logging spam
+
+**Route Error Boundary (`app/dashboard/error.tsx`):**
+- Catches errors in dashboard routes
+- Uses `Sentry.captureException()` directly
+- Provides retry mechanism for users
+
+### Environment Configuration
+
+**File:** `lib/config/sentry-env.ts`
+
+**Features:**
+- Centralized DSN and environment configuration
+- Production warnings if DSNs are missing (does not throw)
+- Falls back to `NODE_ENV` if `SENTRY_ENVIRONMENT` not set
+- Clear error messages for missing configuration
+
+**Next.js Instrumentation (`instrumentation.ts`):**
+- Automatically loads server config when `NEXT_RUNTIME === "nodejs"`
+- Automatically loads edge config when `NEXT_RUNTIME === "edge"`
+- Client config loaded automatically by Sentry SDK
+
+### Sentry Features Enabled
+
+1. **Error Tracking:**
+   - Automatic exception capture
+   - Manual capture via `Sentry.captureException()`
+   - Logger integration for error-level logs
+
+2. **Performance Monitoring:**
+   - Transaction sampling (10% in production, 100% in dev)
+   - Automatic instrumentation of Next.js routes
+   - Custom transaction tracking support
+
+3. **Logs:**
+   - `enableLogs: true` in all configs
+   - Logs sent alongside errors and transactions
+
+4. **Privacy:**
+   - `sendDefaultPii: false` - No automatic PII collection
+   - User identification must be explicit if needed
+
+### Best Practices
+
+- ✅ All three runtimes configured consistently
+- ✅ Environment-aware sampling (cost control)
+- ✅ Privacy-friendly defaults (no PII)
+- ✅ Centralized configuration via `sentry-env.ts`
+- ✅ Logger integration for automatic error reporting
+- ✅ Error boundaries catch and report errors
+- ✅ CSP configured for Sentry domains
+- ✅ Build-time source map upload configured
+
+## 8. Multi-List Management
 
 **Files:** `lib/data/lists-actions.ts`, `lib/data/useLists.ts`, `components/providers/ListsProvider.tsx`
 
@@ -682,7 +903,7 @@ The app uses a **draft-based approval workflow** for all client emails:
 
 ---
 
-### 8. CSV/Excel Import
+### 9. CSV/Excel Import
 
 **Files:** `lib/data/import-commit.ts`, `components/import/ImportDialog.tsx`
 
@@ -703,7 +924,7 @@ The app uses a **draft-based approval workflow** for all client emails:
 
 ---
 
-### 9. Analytics & Reporting
+### 10. Analytics & Reporting
 
 **Files:** `lib/analytics/analytics-utils.ts`, `app/dashboard/analytics/page.tsx`
 
@@ -1138,10 +1359,23 @@ npm run lint
 
 Required in `.env.local`:
 ```env
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+
+# Email (Resend)
 RESEND_API_KEY=your_resend_key
 EMAIL_FROM=alerts@terminalflow.app
+
+# Sentry Error Monitoring
+SENTRY_DSN=your_sentry_dsn_for_server_edge
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn_for_client
+SENTRY_ENVIRONMENT=production  # Optional, defaults to NODE_ENV
+
+# Sentry Build (CI/CD only)
+SENTRY_AUTH_TOKEN=your_sentry_auth_token  # For source map uploads
+SENTRY_ORG=terminalflow
+SENTRY_PROJECT=javascript-nextjs
 ```
 
 ### Key Development Patterns
@@ -1182,13 +1416,31 @@ EMAIL_FROM=alerts@terminalflow.app
 - Event-driven alerts (no scheduled jobs needed)
 - Modern React patterns (Server Components, Server Actions, SWR)
 - Comprehensive error handling and logging
+- Enterprise-grade error monitoring (Sentry integration)
+- Production-ready email system (Resend with draft approval workflow)
 
 **Architecture Highlights:**
 - No background jobs or cron tasks
 - All updates are user-initiated
 - Derived fields computed on-read (never stored)
 - Alerts created only on container updates
-- Email notifications for critical events only
+- Email notifications via manual daily digest generation
+- Error monitoring via Sentry (client, server, edge)
+- Privacy-friendly defaults (no automatic PII collection)
+
+**Monitoring & Observability:**
+- Sentry error tracking across all runtimes
+- Centralized logger with automatic Sentry integration
+- Error boundaries catch and report unhandled errors
+- Performance monitoring with environment-aware sampling
+- Source maps uploaded for better error debugging
+
+**Email System:**
+- Resend API for reliable email delivery
+- Draft-based approval workflow for all client emails
+- Daily digest system with time window support
+- Support for plain text and HTML emails
+- Reply-to address support for client communication
 
 The application is production-ready and follows Next.js and React best practices throughout.
 

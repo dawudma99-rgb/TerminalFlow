@@ -7,13 +7,14 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useMemo } from 'react'
-import { LayoutDashboard, Package, AlertTriangle, Clock, Activity, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, Package, AlertTriangle, Clock, Activity, TrendingUp, DollarSign } from 'lucide-react'
 import type { AlertRow } from '@/lib/data/alerts-actions'
 import { KpiCard } from '@/components/ui/KpiCard'
 import { CriticalIssuesCard } from '@/components/dashboard/CriticalIssuesCard'
 import { AtRiskSoonCard } from '@/components/dashboard/AtRiskSoonCard'
 import { TodaysActivityCard } from '@/components/dashboard/TodaysActivityCard'
 import { ListOverviewCard } from '@/components/dashboard/ListOverviewCard'
+import { calculateCostOfInaction } from '@/lib/analytics'
 
 /**
  * Client component that renders the Dashboard UI.
@@ -41,6 +42,29 @@ export function DashboardContent({ recentAlerts }: { recentAlerts: AlertRow[] })
     })
     return map
   }, [lists])
+
+  // Currency formatter for GBP
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+    }).format(amount)
+  }
+
+  // Compute projected cost (7 days) using analytics function
+  const projectedCost7Days = useMemo(() => {
+    if (!allContainers || allContainers.length === 0) return 0
+    try {
+      const costData = calculateCostOfInaction(allContainers)
+      const totalCost = costData.totalCost
+      // Safely handle null/NaN
+      if (typeof totalCost !== 'number' || isNaN(totalCost)) return 0
+      return totalCost
+    } catch (error) {
+      // Fallback to 0 if calculation fails
+      return 0
+    }
+  }, [allContainers])
 
   // Compute KPIs
   const kpis = useMemo(() => {
@@ -171,8 +195,16 @@ export function DashboardContent({ recentAlerts }: { recentAlerts: AlertRow[] })
         )}
       </header>
 
-      {/* Top row: 5 KPI cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+      {/* Top row: 6 KPI cards */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+        <KpiCard
+          title="Projected Cost (7 days)"
+          value={formatCurrency(projectedCost7Days)}
+          icon={<DollarSign className="h-4 w-4 text-[#D97706]" />}
+          valueClassName="text-[#D97706]"
+          description="Projected demurrage fees if no action taken"
+          tooltip="Based on current overdue containers and those likely to go overdue within 7 days."
+        />
         <KpiCard
           title="Total Active"
           value={kpis.total}

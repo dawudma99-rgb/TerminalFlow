@@ -22,6 +22,8 @@ export interface PortPerformanceData {
   port: string
   count: number
   avgDaysLeft: number
+  overduePercent: number
+  overdueCount: number
 }
 
 export interface AtRiskContainer {
@@ -30,6 +32,35 @@ export interface AtRiskContainer {
   days_left: number
   demurrage_fee_if_late: number
   status?: string
+  list_id?: string | null
+  list_name?: string | null
+  id?: string
+  demurrage_fees?: number
+  detention_fees?: number
+}
+
+export interface ListAnalyticsData {
+  list_id: string
+  list_name: string
+  activeCount: number
+  overdueCount: number
+  dueSoonCount: number
+  estimatedFees: number
+}
+
+export interface DetentionAnalyticsData {
+  container_id: string
+  container_no: string
+  port: string | null
+  days_in_detention: number
+  detention_fees: number
+  list_id?: string | null
+  list_name?: string | null
+}
+
+export interface DetentionSummary {
+  containersInDetention: number
+  totalDetentionFees: number
 }
 
 /**
@@ -148,22 +179,29 @@ export function calculateStatusDistribution(
 
 /**
  * Calculate port performance metrics
- * Groups containers by port and calculates averages
+ * Groups containers by port and calculates averages and overdue percentage
  */
 export function calculatePortPerformance(
   containers: ContainerRecordWithComputed[]
 ): PortPerformanceData[] {
-  const portMap = new Map<string, { count: number; totalDaysLeft: number; activeCount: number }>()
+  const portMap = new Map<string, { 
+    count: number
+    totalDaysLeft: number
+    activeCount: number
+    overdueCount: number
+  }>()
 
   containers.forEach((container) => {
     // Use pod for backward compatibility (port was POD)
-    const port = container.pod || 'Unknown'
+    // Fallback to port field if pod is not available
+    const port = (container.pod || (container as { port?: string | null }).port) || 'Unknown'
     
     if (!portMap.has(port)) {
       portMap.set(port, {
         count: 0,
         totalDaysLeft: 0,
         activeCount: 0,
+        overdueCount: 0,
       })
     }
 
@@ -176,6 +214,11 @@ export function calculatePortPerformance(
       if (daysLeft !== null && daysLeft !== undefined && typeof daysLeft === 'number') {
         portData.totalDaysLeft += daysLeft
         portData.activeCount++
+        
+        // Count overdue containers
+        if (daysLeft < 0) {
+          portData.overdueCount++
+        }
       }
     }
   })
@@ -188,6 +231,10 @@ export function calculatePortPerformance(
       avgDaysLeft: data.activeCount > 0 
         ? Math.round(data.totalDaysLeft / data.activeCount) 
         : 0,
+      overdueCount: data.overdueCount,
+      overduePercent: data.activeCount > 0 
+        ? Math.round((data.overdueCount / data.activeCount) * 100)
+        : 0,
     }))
     .sort((a, b) => b.count - a.count) // Sort by count descending
     .slice(0, 10) // Top 10 ports
@@ -197,10 +244,11 @@ export function calculatePortPerformance(
 
 /**
  * Get top containers at risk
- * Returns the 5 most urgent containers
+ * Returns the most urgent containers, sorted by urgency
  */
 export function getTopAtRiskContainers(
-  containers: ContainerRecordWithComputed[]
+  containers: ContainerRecordWithComputed[],
+  limit: number = 20
 ): AtRiskContainer[] {
   // Filter to open containers with valid days_left
   const activeContainers = containers
@@ -214,19 +262,195 @@ export function getTopAtRiskContainers(
       )
     })
     .sort((a, b) => {
+      // Sort by urgency: Overdue first, then by days_left ascending
+      const aIsOverdue = a.status === 'Overdue' || (a.days_left !== null && a.days_left < 0)
+      const bIsOverdue = b.status === 'Overdue' || (b.days_left !== null && b.days_left < 0)
+      
+      if (aIsOverdue && !bIsOverdue) return -1
+      if (!aIsOverdue && bIsOverdue) return 1
+      
       const aDays = a.days_left || 0
       const bDays = b.days_left || 0
       return aDays - bDays // Sort ascending (most urgent first)
     })
-    .slice(0, 5) // Top 5
+    .slice(0, limit)
     .map((container) => ({
       container_no: container.container_no || '',
-      port: container.pod || 'Unknown',
+      port: container.pod || (container as { port?: string | null }).port || 'Unknown',
       days_left: container.days_left || 0,
       demurrage_fee_if_late: container.demurrage_fee_if_late || 0,
       status: container.status,
+      list_id: container.list_id || null,
+      id: container.id,
+      demurrage_fees: container.demurrage_fees || 0,
+      detention_fees: container.detention_fees || 0,
     }))
 
   return activeContainers
+}
+
+/**
+ * Calculate list-level analytics
+ * Aggregates containers by list_id
+ */
+export function calculateListAnalytics(
+  containers: ContainerRecordWithComputed[],
+  listNameMap: Map<string, string>
+): ListAnalyticsData[] {
+  const listMap = new Map<string, {
+    activeCount: number
+    overdueCount: number
+    dueSoonCount: number
+    estimatedFees: number
+  }>()
+
+  containers.forEach((container) => {
+    // Only count active containers
+    if (container.is_closed) return
+
+    const listId = container.list_id || 'unassigned'
+    const listName = listId !== 'unassigned' 
+      ? (listNameMap.get(listId) || 'Unknown List')
+      : 'Unassigned'
+
+    if (!listMap.has(listId)) {
+      listMap.set(listId, {
+        activeCount: 0,
+        overdueCount: 0,
+        dueSoonCount: 0,
+        estimatedFees: 0,
+      })
+    }
+
+    const listData = listMap.get(listId)!
+    listData.activeCount++
+
+    const daysLeft = container.days_left
+    if (typeof daysLeft === 'number') {
+      if (daysLeft < 0) {
+        listData.overdueCount++
+      } else if (daysLeft > 0 && daysLeft <= 7) {
+        listData.dueSoonCount++
+      }
+    }
+
+    // Sum fees for this list
+    const demurrageFees = typeof container.demurrage_fees === 'number' ? container.demurrage_fees : 0
+    const detentionFees = typeof container.detention_fees === 'number' ? container.detention_fees : 0
+    listData.estimatedFees += demurrageFees + detentionFees
+  })
+
+  // Convert to array, filter lists with active containers, and sort
+  const listArray: ListAnalyticsData[] = Array.from(listMap.entries())
+    .filter(([listId, data]) => data.activeCount > 0)
+    .map(([listId, data]) => ({
+      list_id: listId,
+      list_name: listId !== 'unassigned' 
+        ? (listNameMap.get(listId) || 'Unknown List')
+        : 'Unassigned',
+      activeCount: data.activeCount,
+      overdueCount: data.overdueCount,
+      dueSoonCount: data.dueSoonCount,
+      estimatedFees: data.estimatedFees,
+    }))
+    .sort((a, b) => {
+      // Sort by estimated fees descending, then by overdue count
+      if (b.estimatedFees !== a.estimatedFees) {
+        return b.estimatedFees - a.estimatedFees
+      }
+      return b.overdueCount - a.overdueCount
+    })
+
+  return listArray
+}
+
+/**
+ * Calculate detention analytics
+ * Returns containers currently incurring detention charges
+ */
+export function calculateDetentionAnalytics(
+  containers: ContainerRecordWithComputed[],
+  listNameMap: Map<string, string>
+): {
+  summary: DetentionSummary
+  containers: DetentionAnalyticsData[]
+} {
+  const detentionContainers = containers.filter((container) => {
+    return (
+      container.has_detention &&
+      container.detention_chargeable_days !== null &&
+      container.detention_chargeable_days !== undefined &&
+      container.detention_chargeable_days > 0
+    )
+  })
+
+  const totalDetentionFees = detentionContainers.reduce((sum, container) => {
+    return sum + (typeof container.detention_fees === 'number' ? container.detention_fees : 0)
+  }, 0)
+
+  const detentionData: DetentionAnalyticsData[] = detentionContainers.map((container) => ({
+    container_id: container.id,
+    container_no: container.container_no || '',
+    port: container.pod || (container as { port?: string | null }).port || null,
+    days_in_detention: container.detention_chargeable_days || 0,
+    detention_fees: typeof container.detention_fees === 'number' ? container.detention_fees : 0,
+    list_id: container.list_id || null,
+    list_name: container.list_id ? (listNameMap.get(container.list_id) || null) : null,
+  }))
+
+  return {
+    summary: {
+      containersInDetention: detentionContainers.length,
+      totalDetentionFees,
+    },
+    containers: detentionData.sort((a, b) => b.days_in_detention - a.days_in_detention),
+  }
+}
+
+/**
+ * Calculate trend data for charts
+ * Approximates overdue trend based on current container data
+ */
+export function calculateOverdueTrend(
+  containers: ContainerRecordWithComputed[]
+): Array<{ date: string; overdue: number; notOverdue: number }> {
+  // Since we don't have historical snapshots, approximate trend from current data
+  // by grouping containers by creation/arrival date buckets
+  const trendMap = new Map<string, { overdue: number; notOverdue: number }>()
+
+  containers.forEach((container) => {
+    // Use arrival_date or created_at for grouping
+    const dateStr = container.arrival_date || container.created_at || new Date().toISOString()
+    const date = new Date(dateStr)
+    
+    // Group by month for trend visualization
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    
+    if (!trendMap.has(monthKey)) {
+      trendMap.set(monthKey, { overdue: 0, notOverdue: 0 })
+    }
+
+    const trendData = trendMap.get(monthKey)!
+    const isOverdue = !container.is_closed && 
+      container.days_left !== null && 
+      typeof container.days_left === 'number' &&
+      container.days_left < 0
+
+    if (isOverdue) {
+      trendData.overdue++
+    } else {
+      trendData.notOverdue++
+    }
+  })
+
+  // Convert to array and sort by date
+  return Array.from(trendMap.entries())
+    .map(([date, data]) => ({
+      date,
+      overdue: data.overdue,
+      notOverdue: data.notOverdue,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-6) // Last 6 months
 }
 

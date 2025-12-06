@@ -1,63 +1,120 @@
+import { AnalyticsHero } from '@/components/analytics/AnalyticsHero'
 import { AnalyticsOverview } from '@/components/analytics/AnalyticsOverview'
-import { PortPerformanceTable } from '@/components/analytics/PortPerformanceTable'
-import { RiskTable } from '@/components/analytics/RiskTable'
+import { StatusDistributionChart } from '@/components/analytics/StatusDistributionChart'
+import { OverdueTrendChart } from '@/components/analytics/OverdueTrendChart'
+import { EnhancedPortPerformanceTable } from '@/components/analytics/EnhancedPortPerformanceTable'
+import { ListAnalyticsTable } from '@/components/analytics/ListAnalyticsTable'
+import { DetentionAnalytics } from '@/components/analytics/DetentionAnalytics'
+import { EnhancedRiskTable } from '@/components/analytics/EnhancedRiskTable'
 import { SectionHeader } from '@/components/analytics/SectionHeader'
 import { fetchContainers } from '@/lib/data/containers-actions'
+import { fetchLists } from '@/lib/data/lists-actions'
 import {
   calculateCostOfInaction,
   calculateStatusDistribution,
   calculatePortPerformance,
   getTopAtRiskContainers,
+  calculateListAnalytics,
+  calculateDetentionAnalytics,
+  calculateOverdueTrend,
 } from '@/lib/analytics'
-import { RefreshCcw } from 'lucide-react'
 
 export default async function AnalyticsPage() {
-  // Fetch containers with computed fields (cached automatically)
-  const containers = await fetchContainers()
+  // Fetch containers and lists in parallel
+  const [containers, lists] = await Promise.all([
+    fetchContainers(),
+    fetchLists(),
+  ])
 
-  // Calculate analytics metrics
+  // Create list name map for lookups
+  const listNameMap = new Map<string, string>()
+  lists.forEach((list) => {
+    listNameMap.set(list.id, list.name)
+  })
+
+  // Calculate all analytics metrics
   const costData = calculateCostOfInaction(containers)
   const statusData = calculateStatusDistribution(containers)
   const ports = calculatePortPerformance(containers)
-  const risks = getTopAtRiskContainers(containers)
+  const risks = getTopAtRiskContainers(containers, 20)
+  const listAnalytics = calculateListAnalytics(containers, listNameMap)
+  const detentionAnalytics = calculateDetentionAnalytics(containers, listNameMap)
+  const trendData = calculateOverdueTrend(containers)
+
+  // Enrich risk containers with list names
+  const enrichedRisks = risks.map((risk) => ({
+    ...risk,
+    list_name: risk.list_id ? listNameMap.get(risk.list_id) || null : null,
+  }))
 
   return (
     <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-[#111827]">Analytics Overview</h1>
-              <p className="text-sm text-[#6B7280]">
-                Monitor performance, risk exposure, and container activity across your operations.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-[#6B7280]">
-              <RefreshCcw className="h-4 w-4" />
-              Updated from live container data
-            </div>
-          </div>
-        </div>
+        {/* Hero Section */}
+        <AnalyticsHero />
 
-        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <SectionHeader title="Overview Metrics" description="Cost exposure and health distribution" />
-          <AnalyticsOverview costData={costData} statusData={statusData} />
+        {/* KPI Overview Cards */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <SectionHeader
+            title="Overview Metrics"
+            description="Cost exposure and health distribution"
+          />
+          <div className="mt-4">
+            <AnalyticsOverview costData={costData} statusData={statusData} />
+          </div>
         </section>
 
-        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        {/* Trend & Distribution Charts */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <StatusDistributionChart data={statusData} />
+          <OverdueTrendChart data={trendData} />
+        </section>
+
+        {/* Port Performance */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <SectionHeader
             title="Port Performance Analysis"
-            description="Top ports ranked by container throughput"
+            description="Top ports ranked by throughput and risk."
           />
-          <PortPerformanceTable data={ports} />
+          <div className="mt-4">
+            <EnhancedPortPerformanceTable data={ports} />
+          </div>
         </section>
 
-        <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        {/* Client & List Analytics */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <SectionHeader
+            title="Client & List Analytics"
+            description="Container distribution and risk by client list."
+          />
+          <div className="mt-4">
+            <ListAnalyticsTable data={listAnalytics} />
+          </div>
+        </section>
+
+        {/* Detention Analytics */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <SectionHeader
+            title="Detention Exposure"
+            description="Containers currently incurring detention charges."
+          />
+          <div className="mt-4">
+            <DetentionAnalytics
+              summary={detentionAnalytics.summary}
+              containers={detentionAnalytics.containers}
+            />
+          </div>
+        </section>
+
+        {/* Top Containers at Risk */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <SectionHeader
             title="Top Containers at Risk"
-            description="Most urgent shipments requiring action"
+            description="Most urgent shipments requiring immediate action."
           />
-          <RiskTable data={risks} />
+          <div className="mt-4">
+            <EnhancedRiskTable data={enrichedRisks} limit={20} />
+          </div>
         </section>
       </div>
     </main>

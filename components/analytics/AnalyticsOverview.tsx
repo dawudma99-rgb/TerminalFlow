@@ -21,19 +21,19 @@ export function AnalyticsOverview({ costData, statusData }: AnalyticsOverviewPro
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in duration-300">
-      {/* Cost of Inaction */}
+      {/* Projected Cost */}
       <Card className="hover:shadow-md transition-shadow duration-300">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-primary" />
-            Cost of Inaction (7 days)
+            Projected Cost (7 days)
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-foreground" aria-live="polite">
             {formatCurrency(costData.totalCost)}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Projected fees if no action taken</p>
+          <p className="text-xs text-muted-foreground mt-1">If no action is taken in the next 7 days.</p>
         </CardContent>
       </Card>
 
@@ -49,7 +49,7 @@ export function AnalyticsOverview({ costData, statusData }: AnalyticsOverviewPro
           <div className="text-2xl font-bold text-destructive" aria-live="polite">
             {costData.overdueCount}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Require immediate attention</p>
+          <p className="text-xs text-muted-foreground mt-1">Currently overdue.</p>
         </CardContent>
       </Card>
 
@@ -65,7 +65,7 @@ export function AnalyticsOverview({ costData, statusData }: AnalyticsOverviewPro
           <div className="text-2xl font-bold text-warning" aria-live="polite">
             {costData.dueSoonCount}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Due within 7 days</p>
+          <p className="text-xs text-muted-foreground mt-1">At risk in the next 7 days.</p>
         </CardContent>
       </Card>
 
@@ -81,7 +81,7 @@ export function AnalyticsOverview({ costData, statusData }: AnalyticsOverviewPro
           <div className="text-2xl font-bold text-foreground" aria-live="polite">
             {activeContainers}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Currently open containers</p>
+          <p className="text-xs text-muted-foreground mt-1">Currently open containers.</p>
         </CardContent>
       </Card>
     </div>
