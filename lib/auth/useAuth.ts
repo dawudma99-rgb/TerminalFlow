@@ -134,6 +134,19 @@ function useAuthInternal() {
           startTransition();
           setUser(null);
           setProfile(null);
+
+          // Explicitly clear Supabase cookies on logout
+          try {
+            for (const cookie of document.cookie.split(';')) {
+              if (cookie.trim().startsWith('sb-')) {
+                const [name] = cookie.split('=')
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+              }
+            }
+          } catch (err) {
+            logger.error('[useAuth] Failed to clear Supabase cookies on SIGNED_OUT', err)
+          }
+
           // Clear all SWR caches on logout to prevent showing previous user's data
           globalMutate(() => true, undefined, { revalidate: false });
           

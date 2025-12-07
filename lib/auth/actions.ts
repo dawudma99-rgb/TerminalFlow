@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { hitRateLimit } from '@/lib/rate-limit/simpleLimiter'
+import { cookies } from 'next/headers'
 
 export type SignInResult = {
   success: boolean
@@ -49,6 +50,15 @@ export async function signIn(
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
+
+  // Explicitly clear Supabase auth cookies (access + refresh)
+  const cookieStore = await cookies()
+  for (const cookie of cookieStore.getAll()) {
+    if (cookie.name.startsWith('sb-')) {
+      cookieStore.delete(cookie.name)
+    }
+  }
+
   revalidatePath('/')
 }
 
