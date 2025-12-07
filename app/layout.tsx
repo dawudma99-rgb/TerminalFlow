@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorHandlerProvider } from "@/components/ErrorHandlerProvider";
-import { ListsProvider } from "@/components/providers/ListsProvider";
 import { AuthTransitionProvider } from "@/components/ui/AuthTransition";
 import { Toaster } from "sonner";
 import GlobalErrorBoundary from "./error-boundary";
@@ -37,10 +36,8 @@ export default function RootLayout({
             >
               <AuthTransitionProvider>
                 <AuthProvider>
-                  <ListsProvider>
-                    {children}
-                    <Toaster position="top-right" richColors />
-                  </ListsProvider>
+                  {children}
+                  <Toaster position="top-right" richColors />
                 </AuthProvider>
               </AuthTransitionProvider>
             </ThemeProvider>
