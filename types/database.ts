@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -252,7 +252,8 @@ export type Database = {
           milestone: string | null
           notes: string | null
           organization_id: string
-          port: string
+          pol: string | null
+          pod: string
           status: string | null
           updated_at: string
           user_id: string | null
@@ -285,7 +286,8 @@ export type Database = {
           milestone?: string | null
           notes?: string | null
           organization_id: string
-          port: string
+          pol?: string | null
+          pod: string
           status?: string | null
           updated_at?: string
           user_id?: string | null
@@ -318,7 +320,8 @@ export type Database = {
           milestone?: string | null
           notes?: string | null
           organization_id?: string
-          port?: string
+          pol?: string | null
+          pod?: string | null
           status?: string | null
           updated_at?: string
           user_id?: string | null

@@ -26,7 +26,8 @@ export type OverdueCandidate = {
   // Additional useful fields for debugging
   demurrage_fees: number
   detention_fees: number
-  port: string | null
+  pod: string | null
+  pol: string | null
   milestone: string | null
 }
 
@@ -94,7 +95,8 @@ export async function getOverdueCandidatesForCurrentOrg(): Promise<OverdueCandid
         updated_at: container.updated_at ?? null,
         demurrage_fees: derived.demurrage_fees,
         detention_fees: derived.detention_fees,
-        port: container.port ?? null,
+        pod: container.pod ?? null,
+        pol: container.pol ?? null,
         milestone: container.milestone ?? null,
       })
     }
@@ -190,8 +192,8 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
       severity: 'critical',
       title: 'Container is overdue – demurrage started',
       message:
-        daysOverdue > 0 && candidate.port
-          ? `Container ${candidate.container_no} at ${candidate.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time. Demurrage charges are now accruing.`
+        daysOverdue > 0 && candidate.pod
+          ? `Container ${candidate.container_no} at ${candidate.pod} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time. Demurrage charges are now accruing.`
           : `Free time has ended — demurrage charges may now apply.`,
       metadata: {
         previous_status: null, // We don't know the previous status in backfill
@@ -200,7 +202,8 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
         new_days_left: candidate.days_left,
         days_overdue: daysOverdue,
         container_no: candidate.container_no,
-        port: candidate.port,
+        pod: candidate.pod,
+        pol: candidate.pol ?? null,
         milestone: candidate.milestone,
         arrival_date: candidate.arrival_date,
         free_days: candidate.free_days,
@@ -302,7 +305,8 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
     days_left: number | null
     organization_id: string
     list_id: string | null
-    port: string | null
+    pod: string | null
+    pol: string | null
     milestone: string | null
     arrival_date: string | null
     free_days: number | null
@@ -320,7 +324,8 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
         days_left: derived.days_left,
         organization_id: container.organization_id,
         list_id: container.list_id ?? null,
-        port: container.port ?? null,
+        pod: container.pod ?? null,
+        pol: container.pol ?? null,
         milestone: container.milestone ?? null,
         arrival_date: container.arrival_date ?? null,
         free_days: container.free_days ?? null,
@@ -378,8 +383,8 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
       severity: 'warning',
       title: 'Free time running out',
       message:
-        daysLeft > 0 && candidate.port
-          ? `Container ${candidate.container_no} at ${candidate.port} has ${daysLeft} free day${daysLeft === 1 ? '' : 's'} left.`
+        daysLeft > 0 && candidate.pod
+          ? `Container ${candidate.container_no} at ${candidate.pod} has ${daysLeft} free day${daysLeft === 1 ? '' : 's'} left.`
           : 'This container is running low on free days.',
       metadata: {
         previous_status: null, // We don't know the previous status in backfill
@@ -388,7 +393,8 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
         new_days_left: candidate.days_left,
         days_left: candidate.days_left, // Include for reference
         container_no: candidate.container_no,
-        port: candidate.port,
+        pod: candidate.pod,
+        pol: candidate.pol ?? null,
         milestone: candidate.milestone,
         arrival_date: candidate.arrival_date,
         free_days: candidate.free_days,

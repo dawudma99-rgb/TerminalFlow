@@ -123,7 +123,8 @@ export async function seedDemoData() {
   const demo = [
     {
       container_no: `DEMO${Date.now()}-1`,
-      port: 'Felixstowe',
+      pod: 'Felixstowe',
+      pol: 'Shanghai',
       arrival_date: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
       free_days: 7,
       demurrage_fee_if_late: 80,
@@ -135,7 +136,8 @@ export async function seedDemoData() {
     },
     {
       container_no: `DEMO${Date.now()}-2`,
-      port: 'Southampton',
+      pod: 'Southampton',
+      pol: 'Rotterdam',
       arrival_date: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
       free_days: 5,
       demurrage_fee_if_late: 100,
@@ -147,7 +149,8 @@ export async function seedDemoData() {
     },
     {
       container_no: `DEMO${Date.now()}-3`,
-      port: 'Liverpool',
+      pod: 'Liverpool',
+      pol: 'Hamburg',
       arrival_date: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
       free_days: 10,
       demurrage_fee_if_late: 120,

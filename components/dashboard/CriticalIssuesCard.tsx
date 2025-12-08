@@ -55,7 +55,7 @@ export function CriticalIssuesCard({ containers, totalCount, className }: Critic
           <div className="space-y-2">
             {containers.map((container) => {
               const urgency = formatUrgency(container)
-              const port = container.port || null
+              const port = container.pod || container.pol || null
 
               return (
                 <div

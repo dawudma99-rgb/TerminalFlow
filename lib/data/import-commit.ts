@@ -75,18 +75,36 @@ export async function commitImport(rows: Array<ImportRow>): Promise<{
         }
       }
       
-      // Use pol as port if available, otherwise default to empty string
-      const portValue = typeof row.pol === 'string' && row.pol.trim() ? row.pol.trim() : '';
+      // Normalize pol and pod fields
+      const polValue = normalizeEmptyString(row.pol);
+      const podValue = normalizeEmptyString(row.pod);
+      
+      // Validate required fields before building payload
+      if (!containerNo) {
+        errors.push({ index: i, message: 'Missing container_no' });
+        continue;
+      }
+      if (!arrivalDate) {
+        errors.push({ index: i, message: 'Missing arrival_date' });
+        continue;
+      }
+      if (!podValue || !String(podValue).trim()) {
+        errors.push({ 
+          index: i, 
+          message: 'Missing POD (Port of Discharge). The database requires pod for all containers.' 
+        });
+        continue;
+      }
       
       const payload: ContainerInsert = {
         container_no: containerNo,
         arrival_date: arrivalDate,
         free_days: freeDays,
-        port: portValue,
+        pod: podValue,
         organization_id: orgId,
         list_id: listId,
         // Optional fields - normalize empty strings to null
-        // Note: pol and pod are not in the database schema, so we don't include them
+        pol: polValue,
         bl_number: normalizeEmptyString(row.bl_number),
         carrier: normalizeEmptyString(row.carrier),
         container_size: normalizeEmptyString(row.container_size),
@@ -96,16 +114,6 @@ export async function commitImport(rows: Array<ImportRow>): Promise<{
         empty_return_date: normalizeEmptyString(row.empty_return_date),
         notes: normalizeEmptyString(row.notes),
       };
-
-      // Validate required fields
-      if (!payload.container_no) {
-        errors.push({ index: i, message: 'Missing container_no' });
-        continue;
-      }
-      if (!payload.arrival_date) {
-        errors.push({ index: i, message: 'Missing arrival_date' });
-        continue;
-      }
 
       payloads.push({ index: i, payload });
     } catch (err: unknown) {

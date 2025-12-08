@@ -68,8 +68,8 @@ export async function createAlertsForContainerChange(params: {
       event_type: 'became_warning',
       severity: 'warning',
       title: `Free time running out`,
-      message: newDerived.days_left !== null && newContainer.port
-        ? `Container ${newContainer.container_no} at ${newContainer.port} has ${newDerived.days_left} free day${newDerived.days_left === 1 ? '' : 's'} left.`
+      message: newDerived.days_left !== null && newContainer.pod
+        ? `Container ${newContainer.container_no} at ${newContainer.pod} has ${newDerived.days_left} free day${newDerived.days_left === 1 ? '' : 's'} left.`
         : `This container is running low on free days.`,
       metadata: {
         previous_status: oldStatus,
@@ -77,7 +77,8 @@ export async function createAlertsForContainerChange(params: {
         previous_days_left: oldDerived?.days_left ?? null,
         new_days_left: newDerived.days_left,
         container_no: newContainer.container_no,
-        port: newContainer.port,
+        pod: newContainer.pod,
+        pol: newContainer.pol ?? null,
         milestone: newContainer.milestone,
       },
       created_by_user_id: currentUserId ?? null,
@@ -98,8 +99,8 @@ export async function createAlertsForContainerChange(params: {
       event_type: 'became_overdue',
       severity: 'critical',
       title: 'Container is overdue – demurrage started',
-      message: daysOverdue > 0 && newContainer.port
-        ? `Container ${newContainer.container_no} at ${newContainer.port} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time. Demurrage charges are now accruing.`
+      message: daysOverdue > 0 && newContainer.pod
+        ? `Container ${newContainer.container_no} at ${newContainer.pod} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time. Demurrage charges are now accruing.`
         : `Free time has ended — demurrage charges may now apply.`,
       metadata: {
         previous_status: oldStatus,
@@ -108,7 +109,8 @@ export async function createAlertsForContainerChange(params: {
         new_days_left: newDerived.days_left,
         days_overdue: daysOverdue,
         container_no: newContainer.container_no,
-        port: newContainer.port,
+        pod: newContainer.pod,
+        pol: newContainer.pol ?? null,
         milestone: newContainer.milestone,
         estimated_demurrage_fees: newDerived.demurrage_fees > 0 ? newDerived.demurrage_fees : undefined,
       },
@@ -167,12 +169,13 @@ export async function createAlertsForContainerChange(params: {
       event_type: 'container_closed',
       severity: 'info',
       title: `Container completed`,
-      message: newContainer.port
-        ? `Container ${newContainer.container_no} at ${newContainer.port} is closed — no further action needed.`
+      message: newContainer.pod
+        ? `Container ${newContainer.container_no} at ${newContainer.pod} is closed — no further action needed.`
         : `This container is closed — no further action needed.`,
       metadata: {
         container_no: newContainer.container_no,
-        port: newContainer.port,
+        pod: newContainer.pod,
+        pol: newContainer.pol ?? null,
         milestone: newContainer.milestone,
         final_status: newStatus,
         final_days_left: newDerived.days_left,

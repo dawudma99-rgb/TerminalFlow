@@ -36,7 +36,7 @@ export function AtRiskSoonCard({ containers, totalCount, className }: AtRiskSoon
           <div className="space-y-2">
             {containers.map((container) => {
               const daysLeft = container.days_left ?? 0
-              const port = container.port || null
+              const port = container.pod || container.pol || null
 
               return (
                 <div

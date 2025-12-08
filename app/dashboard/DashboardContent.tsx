@@ -106,7 +106,7 @@ export function DashboardContent({ recentAlerts }: { recentAlerts: AlertRow[] })
         detention_chargeable_days: c.detention_chargeable_days,
         demurrage_fees: c.demurrage_fees,
         detention_fees: c.detention_fees,
-        port: c.port,
+        port: c.pod || c.pol || null,
         list_id: c.list_id,
         list_name: c.list_id ? listNameMap.get(c.list_id) ?? null : null,
       }))
@@ -135,7 +135,7 @@ export function DashboardContent({ recentAlerts }: { recentAlerts: AlertRow[] })
         id: c.id,
         container_no: c.container_no,
         days_left: c.days_left,
-        port: c.port,
+        port: c.pod || c.pol || null,
         list_id: c.list_id,
         list_name: c.list_id ? listNameMap.get(c.list_id) ?? null : null,
       }))

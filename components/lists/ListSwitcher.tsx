@@ -163,8 +163,8 @@ const handleDeleteList = async (listId: string) => {
               {list.name}
             </Button>
             
-            {/* Delete button (only show on hover for non-active lists, skip "Main List") */}
-            {list.name !== 'Main List' && !isActive && switchingListId !== list.id && (
+            {/* Delete button (only show on hover, skip "Main List") */}
+            {list.name !== 'Main List' && switchingListId !== list.id && (
               <ConfirmDialog
                 title="Delete list and all containers?"
                 description={`This will permanently delete "${list.name}" and all containers inside it. This action cannot be undone.`}

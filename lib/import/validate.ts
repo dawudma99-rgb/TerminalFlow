@@ -91,9 +91,12 @@ export function validateRow(input: Record<string, unknown>): RowValidation {
     norm.milestone = null;
   }
 
-  // Heuristic warnings
+  // Heuristic warnings and errors
   if (!norm.pol) warnings.push('POL missing');
-  if (!norm.pod) warnings.push('POD missing');
+  // POD is required in the database (NOT NULL constraint)
+  if (!norm.pod) {
+    errors.push('POD (Port of Discharge) is required. Please fill the pod column in your spreadsheet.');
+  }
   try {
     if (norm.arrival_date) {
       const d = new Date(norm.arrival_date);

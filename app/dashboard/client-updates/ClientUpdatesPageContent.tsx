@@ -134,7 +134,8 @@ function getListNameFromDraft(draft: any): string {
 }
 
 function getPortLabel(metadata: DraftMetadata | null, containerPort?: string | null) {
-  return containerPort ?? metadata?.port ?? '—'
+  // Support both old metadata.port and new metadata.pod for backwards compatibility
+  return containerPort ?? metadata?.pod ?? metadata?.port ?? '—'
 }
 
 interface ClientUpdatesPageContentProps {

@@ -3,7 +3,7 @@ import Link from "next/link"
 import type { ContainerRecordWithComputed } from "@/lib/data/containers-actions"
 
 type AttentionCardProps = {
-  containers: Array<Pick<ContainerRecordWithComputed, "id" | "container_no" | "status" | "days_left" | "port">>
+  containers: Array<Pick<ContainerRecordWithComputed, "id" | "container_no" | "status" | "days_left" | "pod" | "pol">>
   className?: string
 }
 
@@ -11,11 +11,11 @@ type AttentionCardProps = {
  * Formats a human-readable description for a container based on its status and days_left.
  * Uses simple, non-technical language for forwarders.
  */
-function formatContainerDescription(container: Pick<ContainerRecordWithComputed, "status" | "days_left" | "port">): string {
+function formatContainerDescription(container: Pick<ContainerRecordWithComputed, "status" | "days_left" | "pod" | "pol">): string {
   const status = container.status
   // Ensure daysLeft is a number or null (handle undefined)
   const daysLeft: number | null = container.days_left ?? null
-  const port = container.port || 'the port'
+  const port = container.pod || container.pol || 'the port'
 
   if (status === 'Overdue' && daysLeft !== null && daysLeft < 0) {
     const daysOverdue = Math.abs(daysLeft)

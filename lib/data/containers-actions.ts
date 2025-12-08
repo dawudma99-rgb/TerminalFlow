@@ -128,17 +128,24 @@ export async function insertContainer(
     finalListId = activeListId
   }
 
-  // Normalize empty strings to null for pol and pod
+  // Normalize empty strings to null for pol (optional)
+  // pod is required, so ensure it's a non-empty string
   const normalizeOptionalString = (value: string | null | undefined): string | null => {
     if (value === null || value === undefined) return null
     const trimmed = value.trim()
     return trimmed === '' ? null : trimmed
   }
 
+  // Validate pod is provided and non-empty (required field)
+  const podValue = container.pod ? String(container.pod).trim() : ''
+  if (!podValue) {
+    throw new Error('POD (Port of Discharge) is required for all containers')
+  }
+
   const containerWithMilestone = {
     ...container,
     pol: normalizeOptionalString(container.pol),
-    pod: normalizeOptionalString(container.pod),
+    pod: podValue, // Required, so use trimmed value directly
   }
 
   containerWithMilestone.milestone = resolveMilestone(
@@ -225,10 +232,10 @@ export async function updateContainer(id: string, fields: ContainerUpdateInput) 
 
   // Normalize pol and pod if present
   if (Object.prototype.hasOwnProperty.call(normalizedFields, 'pol')) {
-    normalizedFields.pol = normalizeOptionalString(normalizedFields.pol as string | null | undefined)
+    normalizedFields.pol = normalizeOptionalString(normalizedFields.pol as string | null | undefined) as string | null | undefined
   }
   if (Object.prototype.hasOwnProperty.call(normalizedFields, 'pod')) {
-    normalizedFields.pod = normalizeOptionalString(normalizedFields.pod as string | null | undefined)
+    normalizedFields.pod = normalizeOptionalString(normalizedFields.pod as string | null | undefined) as string | null | undefined
   }
 
   // All milestone validation, legacy mapping, and fallbacks live in

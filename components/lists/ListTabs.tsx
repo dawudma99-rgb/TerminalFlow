@@ -153,7 +153,7 @@ export function ListTabs() {
               <span className="truncate">{list.name}</span>
               {showSpinner && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
             </button>
-            {list.name !== 'Main List' && !isActive && (
+            {list.name !== 'Main List' && (
               <ConfirmDialog
                 title="Delete list and all containers?"
                 description={`This will permanently delete "${list.name}" and all containers inside it. This action cannot be undone.`}

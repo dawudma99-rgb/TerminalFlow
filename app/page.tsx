@@ -4,6 +4,7 @@ import { PublicShell } from '@/components/layout/PublicShell'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default async function HomePage() {
   // Check if user is authenticated
@@ -19,27 +20,64 @@ export default async function HomePage() {
   return (
     <PublicShell>
       {/* Hero Section */}
-      <section className="py-20 sm:py-32">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
-              Stop losing money to demurrage.
-            </h1>
-            <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-              TerminalFlow gives small & mid-sized freight forwarders a live control tower for every import container — so you can see what's safe, what's at risk, and what's already overdue.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/login">
-                <Button size="lg" className="w-full sm:w-auto">
-                  Get early access
-                </Button>
-              </Link>
-              <a
-                href="mailto:sales@terminalflow.app?subject=Book a 15-minute walkthrough"
-                className="text-sm text-gray-600 hover:text-gray-900 underline"
-              >
-                Book a 15-minute walkthrough
-              </a>
+      <section className="relative overflow-hidden bg-slate-950 text-white">
+        {/* Background image */}
+        <div className="absolute inset-0">
+          <Image
+            src="/images/logistics-hero.jpg"
+            alt="Container ships being loaded at a busy terminal"
+            fill
+            className="object-cover object-center opacity-75"
+            priority
+            sizes="100vw"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/80 to-slate-950/30" />
+        </div>
+
+        {/* Foreground content */}
+        <div className="relative">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-28">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-10 lg:gap-16 items-center">
+              {/* LEFT: text + buttons */}
+              <div className="max-w-xl space-y-6">
+                <div className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium tracking-wide text-slate-100 mb-3">
+                  Built for freight forwarders
+                </div>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white">
+                  Stop losing money to demurrage.
+                </h1>
+                <p className="text-xl text-slate-200 leading-relaxed">
+                  TerminalFlow gives small & mid-sized freight forwarders a live control tower for every import container — so you can see what's safe, what's at risk, and what's already overdue.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <Link href="/login">
+                    <Button size="lg" className="w-full sm:w-auto">
+                      Get early access
+                    </Button>
+                  </Link>
+                  <a
+                    href="mailto:sales@terminalflow.app?subject=Book a 15-minute walkthrough"
+                    className="text-sm text-slate-300 hover:text-blue-300 underline"
+                  >
+                    Book a 15-minute walkthrough
+                  </a>
+                </div>
+              </div>
+
+              {/* RIGHT: small stat/summary card */}
+              <div className="max-w-md lg:justify-self-end lg:mr-8">
+                <div className="rounded-2xl bg-white/10 backdrop-blur shadow-xl border border-white/10 p-5 space-y-4">
+                  <p className="text-sm font-medium text-slate-100 uppercase tracking-wide">
+                    Demurrage is avoidable
+                  </p>
+                  <p className="text-xl font-semibold text-white">
+                    Flag risk before the charges start.
+                  </p>
+                  <p className="text-sm text-slate-200/80">
+                    TerminalFlow highlights containers before free time expires so your team can act before the costs hit the invoice.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

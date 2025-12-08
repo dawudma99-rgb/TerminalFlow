@@ -192,9 +192,9 @@ export function calculatePortPerformance(
   }>()
 
   containers.forEach((container) => {
-    // Use pod for backward compatibility (port was POD)
-    // Fallback to port field if pod is not available
-    const port = (container.pod || (container as { port?: string | null }).port) || 'Unknown'
+    // Use pod (Port of Discharge) as the primary port identifier
+    // Fallback to pol if pod is not available, then 'Unknown'
+    const port = container.pod || container.pol || 'Unknown'
     
     if (!portMap.has(port)) {
       portMap.set(port, {
@@ -276,7 +276,7 @@ export function getTopAtRiskContainers(
     .slice(0, limit)
     .map((container) => ({
       container_no: container.container_no || '',
-      port: container.pod || (container as { port?: string | null }).port || 'Unknown',
+      port: container.pod || container.pol || 'Unknown',
       days_left: container.days_left || 0,
       demurrage_fee_if_late: container.demurrage_fee_if_late || 0,
       status: container.status,
@@ -391,7 +391,7 @@ export function calculateDetentionAnalytics(
   const detentionData: DetentionAnalyticsData[] = detentionContainers.map((container) => ({
     container_id: container.id,
     container_no: container.container_no || '',
-    port: container.pod || (container as { port?: string | null }).port || null,
+    port: container.pod || container.pol || null,
     days_in_detention: container.detention_chargeable_days || 0,
     detention_fees: typeof container.detention_fees === 'number' ? container.detention_fees : 0,
     list_id: container.list_id || null,
