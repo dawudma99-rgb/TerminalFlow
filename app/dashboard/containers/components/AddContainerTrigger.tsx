@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { AddContainerForm } from '@/components/forms/AddContainerForm'
 import { Plus } from 'lucide-react'
-import { insertContainer, type ContainerInsert } from '@/lib/data/containers-actions'
+import { insertContainer } from '@/lib/data/containers-actions'
 import type { Json } from '@/types/database'
 import { Tier } from '@/lib/tierUtils'
 import { logger } from '@/lib/utils/logger'
@@ -82,7 +82,7 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
         has_detention: data.detention_enabled,
       }
 
-      await insertContainer(containerData as ContainerInsert)
+      await insertContainer(containerData as any)
       if (reload) {
         await reload()
       }
