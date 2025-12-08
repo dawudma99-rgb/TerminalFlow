@@ -88,7 +88,7 @@ export function buildDailyDigestForList(params: {
   // Helper to get container number and port
   const getContainerDisplay = (c: ContainerRow) => {
     const cn = c.container_no || `Container ${c.id}`
-    const port = (c as any).pod || c.port || null
+    const port = (c as any).pod || (c as any).pol || null
     return { container_no: cn, port }
   }
 
