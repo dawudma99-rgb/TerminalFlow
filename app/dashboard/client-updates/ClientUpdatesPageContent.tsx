@@ -50,6 +50,8 @@ import {
 
 type DraftMetadata = {
   port?: string | null
+  pod?: string | null
+  pol?: string | null
   list_id?: string | null
   list_name?: string | null
   generated_from?: string | null

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
+import type { Json } from '@/types/database'
 import { revalidatePath } from 'next/cache'
 import { computeDerivedFields } from '@/lib/utils/containers'
 import {
@@ -19,6 +20,30 @@ import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 export type ContainerRecord = Database['public']['Tables']['containers']['Row']
 export type ContainerInsert = Database['public']['Tables']['containers']['Insert']
 export type ContainerUpdate = Database['public']['Tables']['containers']['Update']
+
+/**
+ * Client-side input type for creating new containers.
+ * This represents the shape of data sent from the UI form.
+ * Server-side fields (organization_id, list_id) are added by insertContainer.
+ */
+export type ClientContainerInput = {
+  container_no: string
+  bl_number: string | null
+  pol: string | null
+  pod: string
+  arrival_date: string | null
+  free_days: number
+  carrier: string | null
+  container_size: string | null
+  milestone: string | null
+  notes: string | null
+  assigned_to: string | null
+  gate_out_date: string | null
+  empty_return_date: string | null
+  demurrage_tiers: Json | null
+  detention_tiers: Json | null
+  has_detention: boolean
+}
 
 // Extended types that include pol and pod fields used in the codebase
 // These fields may not exist in the database schema yet but are used throughout the app
@@ -115,7 +140,7 @@ export async function fetchContainers(listId?: string | null): Promise<Container
  * Always sets list_id (never null).
  */
 export async function insertContainer(
-  container: Omit<ContainerInsertWithPolPod, 'organization_id' | 'list_id'>,
+  container: ClientContainerInput,
   listId?: string | null
 ) {
   const { supabase, organizationId, user } = await getServerAuthContext()
@@ -142,35 +167,49 @@ export async function insertContainer(
     throw new Error('POD (Port of Discharge) is required for all containers')
   }
 
-  const containerWithMilestone = {
-    ...container,
-    pol: normalizeOptionalString(container.pol),
-    pod: podValue, // Required, so use trimmed value directly
-  }
-
-  containerWithMilestone.milestone = resolveMilestone(
-    containerWithMilestone.milestone,
+  // Resolve milestone from input
+  const resolvedMilestone = resolveMilestone(
+    container.milestone,
     {
-      gate_out_date: containerWithMilestone.gate_out_date,
-      empty_return_date: containerWithMilestone.empty_return_date,
+      gate_out_date: container.gate_out_date,
+      empty_return_date: container.empty_return_date,
     }
   )
 
-  const containerWithOrg = {
-    ...containerWithMilestone,
+  // Build the properly typed ContainerInsert payload
+  const containerToInsert: ContainerInsert = {
+    // Required fields
+    container_no: container.container_no,
+    arrival_date: container.arrival_date || new Date().toISOString(),
     organization_id: organizationId,
-    list_id: finalListId, // Should never be null after ensureMainListForCurrentOrg()
+    pod: podValue,
+
+    // Optional / server-managed
+    list_id: finalListId,
+    pol: normalizeOptionalString(container.pol),
+    free_days: container.free_days,
+    bl_number: container.bl_number,
+    carrier: container.carrier,
+    container_size: container.container_size,
+    milestone: resolvedMilestone,
+    notes: container.notes,
+    assigned_to: container.assigned_to,
+    gate_out_date: container.gate_out_date,
+    empty_return_date: container.empty_return_date,
+    demurrage_tiers: container.demurrage_tiers,
+    detention_tiers: container.detention_tiers,
+    has_detention: container.has_detention,
   }
 
   logger.debug('[insertContainer] payload', {
-    container_no: containerWithOrg.container_no,
+    container_no: containerToInsert.container_no,
     organization_id: organizationId,
     list_id: finalListId,
   })
 
   const { data, error } = await supabase
     .from('containers')
-    .insert(containerWithOrg)
+    .insert(containerToInsert)
     .select()
     .single()
 

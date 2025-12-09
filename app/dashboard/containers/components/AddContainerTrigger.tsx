@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { AddContainerForm } from '@/components/forms/AddContainerForm'
 import { Plus } from 'lucide-react'
-import { insertContainer } from '@/lib/data/containers-actions'
+import { insertContainer, type ClientContainerInput } from '@/lib/data/containers-actions'
 import type { Json } from '@/types/database'
 import { Tier } from '@/lib/tierUtils'
 import { logger } from '@/lib/utils/logger'
@@ -56,11 +56,14 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
         return trimmed ? trimmed : null
       }
 
-      const containerData = {
+      // Ensure pod is not null (required field) - default to empty string if null
+      const podValue: string = normalizeOptionalString(data.pod) ?? ''
+      
+      const containerData: ClientContainerInput = {
         container_no: data.container_no,
         bl_number: normalizeOptionalString(data.bl_number),
         pol: normalizeOptionalString(data.pol),
-        pod: normalizeOptionalString(data.pod),
+        pod: podValue,
         arrival_date: normalizeDate(data.arrival_date),
         free_days: data.free_days,
         carrier: data.carrier || null,
@@ -73,16 +76,18 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
         assigned_to: normalizeOptionalString(data.assigned_to),
         gate_out_date: normalizeDate(data.gate_out_date),
         empty_return_date: normalizeDate(data.empty_return_date),
-        demurrage_tiers: data.demurrage_enabled && data.demurrage_tiers?.length > 0
-          ? (data.demurrage_tiers as unknown as Json)
-          : null,
-        detention_tiers: data.detention_enabled && data.detention_tiers?.length > 0
-          ? (data.detention_tiers as unknown as Json)
-          : null,
+        demurrage_tiers:
+          data.demurrage_enabled && data.demurrage_tiers?.length > 0
+            ? (data.demurrage_tiers as unknown as Json)
+            : null,
+        detention_tiers:
+          data.detention_enabled && data.detention_tiers?.length > 0
+            ? (data.detention_tiers as unknown as Json)
+            : null,
         has_detention: data.detention_enabled,
       }
 
-      await insertContainer(containerData as any)
+      await insertContainer(containerData)
       if (reload) {
         await reload()
       }
