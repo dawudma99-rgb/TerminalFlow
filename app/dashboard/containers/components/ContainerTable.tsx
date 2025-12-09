@@ -147,20 +147,16 @@ export function ContainerTable({
     }
   }
 
-  const handleToggleSelectAll = (e?: React.MouseEvent) => {
+  const handleToggleSelectAll = (checked: boolean) => {
     if (!onSelectionChange) return
-    if (e) {
-      e.stopPropagation()
-    }
-    if (allVisibleSelected) {
-      // Deselect all visible containers
-      const visibleIds = containers.map(c => c.id)
-      onSelectionChange(selectedIds.filter(id => !visibleIds.includes(id)))
-    } else {
+    const visibleIds = containers.map(c => c.id)
+    if (checked) {
       // Select all visible containers
-      const visibleIds = containers.map(c => c.id)
       const newSelected = [...new Set([...selectedIds, ...visibleIds])]
       onSelectionChange(newSelected)
+    } else {
+      // Deselect all visible containers
+      onSelectionChange(selectedIds.filter(id => !visibleIds.includes(id)))
     }
   }
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false)
@@ -234,7 +230,7 @@ export function ContainerTable({
                   type="checkbox"
                   ref={selectAllCheckboxRef}
                   checked={allVisibleSelected}
-                  onChange={(e) => handleToggleSelectAll(e)}
+                  onChange={(e) => handleToggleSelectAll(e.target.checked)}
                   className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#2563EB] focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-0"
                   aria-label="Select all visible containers"
                 />
