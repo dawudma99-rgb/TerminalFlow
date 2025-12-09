@@ -160,7 +160,6 @@ export function isActiveRoute(currentPath: string, targetPath: string): boolean 
   const matcherTemplate = toMatcherTemplate(normalizedTarget)
   const matcher = pathToRegexp(matcherTemplate, {
     sensitive: false,
-    strict: false,
     end: routeDepth === 'root',
   })
 

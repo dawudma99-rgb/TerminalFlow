@@ -1,62 +1,117 @@
-import { jest } from '@jest/globals'
-import '@testing-library/jest-dom'
+/**
+ * Author: GPT-5 Codex
+ * Date: 2025-01-27
+ * Purpose: Validate Sidebar navigation active states using Node.js test runner.
+ */
+
+import assert from 'node:assert/strict'
+import test from 'node:test'
 import { render, screen } from '@testing-library/react'
+import { JSDOM } from 'jsdom'
+
+// Set up DOM environment for React Testing Library
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+  url: 'http://localhost',
+  pretendToBeVisual: true,
+  resources: 'usable',
+})
+
+// @ts-expect-error - Setting up global DOM for React Testing Library
+global.window = dom.window as unknown as Window & typeof globalThis
+// @ts-expect-error - Setting up global document for React Testing Library
+global.document = dom.window.document
+// @ts-expect-error - Setting up global navigator for React Testing Library
+global.navigator = dom.window.navigator
 
 import { Sidebar } from '@/components/layout/Sidebar'
 import * as nextNavigation from 'next/navigation'
 
-describe('Sidebar navigation active states', () => {
-  const mockUsePathname = (path: string) => {
-    jest.spyOn(nextNavigation, 'usePathname').mockReturnValue(path)
+// Helper to check if element has class
+function hasClass(element: HTMLElement, className: string): boolean {
+  return element.classList.contains(className)
+}
+
+// Helper to mock usePathname
+function mockUsePathname(path: string) {
+  const originalUsePathname = nextNavigation.usePathname
+  // @ts-expect-error - Mocking for test
+  nextNavigation.usePathname = () => path
+  return () => {
+    // @ts-expect-error - Restoring original
+    nextNavigation.usePathname = originalUsePathname
   }
+}
 
-  afterEach(() => {
-    jest.restoreAllMocks()
-  })
-
-  test('highlights Dashboard only for /dashboard', () => {
-    mockUsePathname('/dashboard')
+test('highlights Dashboard only for /dashboard', () => {
+  const restore = mockUsePathname('/dashboard')
+  try {
     render(<Sidebar />)
 
     const dashboard = screen.getByText('Dashboard')
-    expect(dashboard).toHaveClass('bg-[#ECF2FD]')
-    expect(screen.getByText('Containers')).not.toHaveClass('bg-[#ECF2FD]')
-  })
+    const containers = screen.getByText('Containers')
 
-  test('highlights Containers only for /dashboard/containers', () => {
-    mockUsePathname('/dashboard/containers')
+    assert.ok(hasClass(dashboard, 'bg-[#ECF2FD]'), 'Dashboard should have active class')
+    assert.ok(!hasClass(containers, 'bg-[#ECF2FD]'), 'Containers should not have active class')
+  } finally {
+    restore()
+  }
+})
+
+test('highlights Containers only for /dashboard/containers', () => {
+  const restore = mockUsePathname('/dashboard/containers')
+  try {
     render(<Sidebar />)
 
     const containers = screen.getByText('Containers')
-    expect(containers).toHaveClass('bg-[#ECF2FD]')
-    expect(screen.getByText('Dashboard')).not.toHaveClass('bg-[#ECF2FD]')
-  })
+    const dashboard = screen.getByText('Dashboard')
 
-  test('highlights Analytics and Reports for /dashboard/analytics/reports', () => {
-    mockUsePathname('/dashboard/analytics/reports')
+    assert.ok(hasClass(containers, 'bg-[#ECF2FD]'), 'Containers should have active class')
+    assert.ok(!hasClass(dashboard, 'bg-[#ECF2FD]'), 'Dashboard should not have active class')
+  } finally {
+    restore()
+  }
+})
+
+test('highlights Analytics and Reports for /dashboard/analytics/reports', () => {
+  const restore = mockUsePathname('/dashboard/analytics/reports')
+  try {
     render(<Sidebar />)
 
     const analytics = screen.getByText('Analytics')
     const reports = screen.getByText('Reports')
 
-    expect(analytics).toHaveClass('bg-[#ECF2FD]')
-    expect(reports).toHaveClass('bg-[#DCE9FE]')
-  })
+    assert.ok(hasClass(analytics, 'bg-[#ECF2FD]'), 'Analytics should have active class')
+    assert.ok(hasClass(reports, 'bg-[#DCE9FE]'), 'Reports should have nested active class')
+  } finally {
+    restore()
+  }
+})
 
-  test('highlights Settings only for /dashboard/settings', () => {
-    mockUsePathname('/dashboard/settings')
+test('highlights Settings only for /dashboard/settings', () => {
+  const restore = mockUsePathname('/dashboard/settings')
+  try {
     render(<Sidebar />)
 
     const settings = screen.getByText('Settings')
-    expect(settings).toHaveClass('bg-[#ECF2FD]')
-  })
 
-  test('renders no active state for unknown route', () => {
-    mockUsePathname('/unknown')
+    assert.ok(hasClass(settings, 'bg-[#ECF2FD]'), 'Settings should have active class')
+  } finally {
+    restore()
+  }
+})
+
+test('renders no active state for unknown route', () => {
+  const restore = mockUsePathname('/unknown')
+  try {
     render(<Sidebar />)
 
-    expect(document.querySelectorAll('.bg-[#ECF2FD]').length).toBe(0)
-    expect(document.querySelectorAll('.bg-[#DCE9FE]').length).toBe(0)
-  })
+    const activeElements = document.querySelectorAll('.bg-[#ECF2FD]')
+    const nestedActiveElements = document.querySelectorAll('.bg-[#DCE9FE]')
+
+    assert.equal(activeElements.length, 0, 'Should have no active elements')
+    assert.equal(nestedActiveElements.length, 0, 'Should have no nested active elements')
+  } finally {
+    restore()
+  }
 })
 
