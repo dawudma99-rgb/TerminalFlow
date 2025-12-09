@@ -7,7 +7,7 @@ import {
   isValidMilestone,
   normalizeMilestone,
   resolveMilestone,
-} from '../../lib/utils/milestones'
+} from '../../../lib/utils/milestones'
 
 test('isValidMilestone accepts every canonical milestone', () => {
   for (const milestone of CONTAINER_MILESTONES) {

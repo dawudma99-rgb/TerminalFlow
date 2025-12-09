@@ -16,12 +16,10 @@ const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
   resources: 'usable',
 })
 
-// @ts-expect-error - Setting up global DOM for React Testing Library
-global.window = dom.window as unknown as Window & typeof globalThis
-// @ts-expect-error - Setting up global document for React Testing Library
-global.document = dom.window.document
-// @ts-expect-error - Setting up global navigator for React Testing Library
-global.navigator = dom.window.navigator
+// Setting up global DOM for React Testing Library
+;(global as unknown as { window: Window }).window = dom.window as unknown as Window & typeof globalThis
+;(global as unknown as { document: Document }).document = dom.window.document
+;(global as unknown as { navigator: Navigator }).navigator = dom.window.navigator
 
 import { Sidebar } from '@/components/layout/Sidebar'
 import * as nextNavigation from 'next/navigation'
@@ -34,11 +32,11 @@ function hasClass(element: HTMLElement, className: string): boolean {
 // Helper to mock usePathname
 function mockUsePathname(path: string) {
   const originalUsePathname = nextNavigation.usePathname
-  // @ts-expect-error - Mocking for test
-  nextNavigation.usePathname = () => path
+  // Mocking for test - usePathname is a hook that returns string | null
+  ;(nextNavigation as unknown as { usePathname: () => string }).usePathname = () => path
   return () => {
-    // @ts-expect-error - Restoring original
-    nextNavigation.usePathname = originalUsePathname
+    // Restoring original
+    ;(nextNavigation as unknown as { usePathname: typeof originalUsePathname }).usePathname = originalUsePathname
   }
 }
 

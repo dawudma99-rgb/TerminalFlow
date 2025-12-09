@@ -163,7 +163,7 @@ export function isActiveRoute(currentPath: string, targetPath: string): boolean 
     end: routeDepth === 'root',
   })
 
-  const match = normalizedCurrent.match(matcher)
+  const match = normalizedCurrent.match(matcher.regexp)
   if (!match || match.index !== 0) {
     return false
   }

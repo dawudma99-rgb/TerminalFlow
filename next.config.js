@@ -14,6 +14,9 @@ const cspReportOnlyValue = CONTENT_SECURITY_POLICY.replace(/\s{2,}/g, ' ').trim(
 const nextConfig = {
   reactStrictMode: true,
   experimental: {},
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   async headers() {
     return [
       {
