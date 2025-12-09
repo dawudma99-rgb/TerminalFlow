@@ -158,7 +158,7 @@ export function isActiveRoute(currentPath: string, targetPath: string): boolean 
   const routeDepth = categorizeRouteDepth(targetSegments)
 
   const matcherTemplate = toMatcherTemplate(normalizedTarget)
-  const matcher = pathToRegexp(matcherTemplate, [], {
+  const matcher = pathToRegexp(matcherTemplate, {
     sensitive: false,
     strict: false,
     end: routeDepth === 'root',
