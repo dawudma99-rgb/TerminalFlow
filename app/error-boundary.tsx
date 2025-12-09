@@ -26,12 +26,12 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
 
       if (isNoiseError) {
         // Silently suppress known noise errors
-        logger.warn({ message: 'Filtered noisy unhandled rejection', reason })
+        logger.warn('Filtered noisy unhandled rejection', { reason })
         event.preventDefault()
         return
       }
 
-      logger.error({ message: 'Unhandled rejection', reason })
+      logger.error('Unhandled rejection', { reason })
 
       const errToCapture =
         reason instanceof Error ? reason : new Error(typeof reason === 'string' ? reason : 'Unhandled rejection')
@@ -62,12 +62,12 @@ export default function GlobalErrorBoundary({ children }: { children: React.Reac
 
       if (isNoiseError) {
         // Silently suppress known noise errors
-        logger.warn({ message: 'Filtered noisy window error', error: rawError })
+        logger.warn('Filtered noisy window error', { error: rawError })
         event.preventDefault()
         return
       }
 
-      logger.error({ message: 'Window error', error: rawError, messageText: event.message })
+      logger.error('Window error', { error: rawError, messageText: event.message })
 
       const errToCapture =
         rawError instanceof Error
