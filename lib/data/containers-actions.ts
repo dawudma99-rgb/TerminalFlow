@@ -59,8 +59,8 @@ export type ContainerUpdateWithPolPod = ContainerUpdate & {
 
 // Extended type with computed fields
 // This includes all database ContainerRecord fields plus computed fields from ContainerWithDerivedFields
-// Note: pol and pod are included here even though they may not be in the DB schema yet,
-// as they are used throughout the codebase
+// Note: pol and pod are already in ContainerRecord from the database types, but we explicitly include them
+// to ensure TypeScript recognizes them in all contexts
 export type ContainerRecordWithComputed = ContainerRecord & {
   days_left: number | null
   status: string
@@ -69,8 +69,9 @@ export type ContainerRecordWithComputed = ContainerRecord & {
   lfd_date: string | null
   detention_chargeable_days: number | null
   detention_status: 'Safe' | 'Warning' | 'Overdue' | null
-  pol?: string | null
-  pod?: string | null
+  // pol and pod are already in ContainerRecord, but explicitly including them ensures type compatibility
+  pol: string | null
+  pod: string
 }
 
 // --- Read ---

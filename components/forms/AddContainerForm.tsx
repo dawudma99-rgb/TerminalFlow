@@ -756,7 +756,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     tiers={formData.demurrage_tiers}
                     onTiersChange={(tiers) => handleTierChange('demurrage_tiers', tiers)}
                     onSaveDefault={handleSaveDemurrageDefaults}
-                    carrier={formData.carrier}
+                    carrier={formData.carrier ?? undefined}
                     savingDefaults={savingDefaults}
                   />
                   
@@ -896,7 +896,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                     tiers={formData.detention_tiers}
                     onTiersChange={(tiers) => handleTierChange('detention_tiers', tiers)}
                     onSaveDefault={handleSaveDetentionDefaults}
-                    carrier={formData.carrier}
+                    carrier={formData.carrier ?? undefined}
                     savingDefaults={savingDefaults}
                   />
                 </div>
