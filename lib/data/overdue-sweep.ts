@@ -194,7 +194,7 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
   }
 
   const warningThresholdDays = DEFAULT_WARNING_THRESHOLD_DAYS ?? 2
-  const overdueContainers = []
+  const overdueContainers: ContainerRecord[] = []
 
   for (const c of containers) {
     try {
@@ -349,7 +349,7 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
   }
 
   const warningThresholdDays = DEFAULT_WARNING_THRESHOLD_DAYS ?? 2
-  const warningContainers = []
+  const warningContainers: ContainerRecord[] = []
 
   for (const c of containers) {
     try {
