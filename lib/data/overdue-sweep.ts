@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { computeDerivedFields } from '@/lib/utils/containers'
-import type { ContainerRecord } from '@/lib/utils/containers'
+import type { ContainerRecord } from '@/lib/data/containers-actions'
 import { logger } from '@/lib/utils/logger'
 import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 
