@@ -63,7 +63,6 @@ export function ListTabs() {
       const newList = await createList(newListName.trim())
       setNewListName('')
       setIsCreateDialogOpen(false)
-      await setActiveList(newList.id)
     } catch (error) {
       logger.error('[ListTabs] Failed to create list:', error)
       // Error toast handled inside createList
