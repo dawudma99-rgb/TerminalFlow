@@ -22,13 +22,13 @@ import { backfillOverdueAlertsForCurrentOrg } from '@/lib/data/overdue-sweep'
  *   ```json
  *   {
  *     "ok": true,
- *     "totalOverdue": 3,
+ *     "totalWarnings": 3,
  *     "createdAlerts": 2,
  *     "skippedExisting": 1
  *   }
  *   ```
  *   Where:
- *   - `totalOverdue`: Total number of overdue containers found
+ *   - `totalWarnings`: Total number of overdue containers found
  *   - `createdAlerts`: Number of new alerts created
  *   - `skippedExisting`: Number of containers that already had a `became_overdue` alert
  * 

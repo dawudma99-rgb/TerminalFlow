@@ -2,10 +2,13 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { computeDerivedFields } from '@/lib/utils/containers'
 import type { ContainerRecord } from '@/lib/utils/containers'
 import { logger } from '@/lib/utils/logger'
 import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
+
+const DEFAULT_WARNING_THRESHOLD_DAYS = 2
 
 /**
  * Type for the overdue candidate result.
@@ -117,7 +120,7 @@ export async function getOverdueCandidatesForCurrentOrg(): Promise<OverdueCandid
  * Summary type for backfill operations.
  */
 export type BackfillSummary = {
-  totalOverdue: number
+  totalWarnings: number
   createdAlerts: number
   skippedExisting: number
 }
@@ -136,118 +139,142 @@ export type BackfillSummary = {
  * @returns Summary object with counts of total overdue containers, created alerts, and skipped (existing) alerts
  */
 export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSummary> {
-  const { supabase, organizationId } = await getServerAuthContext()
-  const orgId = organizationId
+  const emptySummary: BackfillSummary = {
+    totalWarnings: 0,
+    createdAlerts: 0,
+    skippedExisting: 0,
+  }
 
-  // Get all overdue candidates
-  const overdueCandidates = await getOverdueCandidatesForCurrentOrg()
+  let supabase: SupabaseClient<Database>
+  let organizationId: string
 
-  if (overdueCandidates.length === 0) {
-    return {
-      totalOverdue: 0,
-      createdAlerts: 0,
-      skippedExisting: 0,
+  try {
+    const ctx = await getServerAuthContext()
+    supabase = ctx.supabase
+    organizationId = ctx.organizationId
+
+    if (!organizationId) {
+      logger.warn('[backfillOverdueAlertsForCurrentOrg] No organizationId in auth context')
+      return emptySummary
+    }
+  } catch (error) {
+    logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to get auth context', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return emptySummary
+  }
+
+  let containers: ContainerRecord[] = []
+
+  try {
+    const { data, error } = await supabase
+      .from('containers')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('is_closed', false)
+      .not('arrival_date', 'is', null)
+      .not('free_days', 'is', null)
+
+    if (error) {
+      logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to fetch containers', {
+        organizationId,
+        error: error.message,
+      })
+      return emptySummary
+    }
+
+    containers = data ?? []
+    if (containers.length === 0) return emptySummary
+  } catch (error) {
+    logger.error('[backfillOverdueAlertsForCurrentOrg] Unexpected error fetching containers', {
+      organizationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return emptySummary
+  }
+
+  const warningThresholdDays = DEFAULT_WARNING_THRESHOLD_DAYS ?? 2
+  const overdueContainers = []
+
+  for (const c of containers) {
+    try {
+      const derived = computeDerivedFields(c, warningThresholdDays)
+      if (derived.status === 'Overdue') overdueContainers.push(c)
+    } catch (error) {
+      logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to compute derived fields', {
+        container_id: c.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
   let createdAlerts = 0
   let skippedExisting = 0
 
-  // Process each overdue container
-  for (const candidate of overdueCandidates) {
-    // Check if a `became_overdue` alert already exists for this container
-    const { data: existingAlerts, error: checkError } = await supabase
-      .from('alerts')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('container_id', candidate.id)
-      .eq('event_type', 'became_overdue')
-      .limit(1)
+  for (const container of overdueContainers) {
+    try {
+      const { data: existingAlerts, error: existingError } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('container_id', container.id)
+        .eq('event_type', 'became_overdue')
+        .is('cleared_at', null)
+        .limit(1)
 
-    if (checkError) {
-      logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to check existing alerts', {
-        container_id: candidate.id,
-        error: checkError.message,
-      })
-      // Skip this container if we can't check for existing alerts
-      skippedExisting++
-      continue
-    }
-
-    // If an alert already exists, skip this container
-    if (existingAlerts && existingAlerts.length > 0) {
-      skippedExisting++
-      continue
-    }
-
-    // Calculate days overdue (days_left is negative for overdue containers)
-    const daysOverdue = Math.abs(candidate.days_left)
-
-    // Create the alert row (matching the structure from createAlertsForContainerChange)
-    const alertToInsert: Database['public']['Tables']['alerts']['Insert'] = {
-      organization_id: orgId,
-      container_id: candidate.id,
-      list_id: candidate.list_id,
-      event_type: 'became_overdue',
-      severity: 'critical',
-      title: 'Container is overdue – demurrage started',
-      message:
-        daysOverdue > 0 && candidate.pod
-          ? `Container ${candidate.container_no} at ${candidate.pod} is ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} past free time. Demurrage charges are now accruing.`
-          : `Free time has ended — demurrage charges may now apply.`,
-      metadata: {
-        previous_status: null, // We don't know the previous status in backfill
-        new_status: 'Overdue',
-        previous_days_left: null,
-        new_days_left: candidate.days_left,
-        days_overdue: daysOverdue,
-        container_no: candidate.container_no,
-        pod: candidate.pod,
-        pol: candidate.pol ?? null,
-        milestone: candidate.milestone,
-        arrival_date: candidate.arrival_date,
-        free_days: candidate.free_days,
-        // Mark as backfilled for debugging
-        backfilled: true,
-      },
-      created_by_user_id: null, // No user action - this is a backfill
-    }
-
-    // Insert the alert
-    const { error: insertError } = await supabase.from('alerts').insert(alertToInsert)
-
-    if (insertError) {
-      logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to create alert', {
-        container_id: candidate.id,
-        container_no: candidate.container_no,
-        error: insertError.message,
-      })
-      // Continue processing other containers even if one fails
-      skippedExisting++
-    } else {
-      createdAlerts++
-      // Note: Email drafts are no longer auto-created for individual container events.
-      // Daily digests are generated separately via createDailyDigestDraftsForToday().
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('[backfillOverdueAlertsForCurrentOrg] Created alert', {
-          container_id: candidate.id,
-          container_no: candidate.container_no,
+      if (existingError) {
+        logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to check existing overdue alerts', {
+          container_id: container.id,
+          error: existingError.message,
         })
+        continue
       }
-    }
-  }
 
-  if (process.env.NODE_ENV === 'development') {
-    logger.debug('[backfillOverdueAlertsForCurrentOrg] Backfill complete', {
-      organization_id: orgId,
-      totalOverdue: overdueCandidates.length,
-      createdAlerts,
-      skippedExisting,
-    })
+      if (existingAlerts?.length) {
+        skippedExisting++
+        continue
+      }
+
+      const derived = computeDerivedFields(container, warningThresholdDays)
+
+      const { error: insertError } = await supabase.from('alerts').insert({
+        organization_id: organizationId,
+        container_id: container.id,
+        list_id: container.list_id,
+        event_type: 'became_overdue',
+        severity: 'critical',
+        title: 'Container is overdue – demurrage started',
+        message: `Container ${container.container_no} is overdue. Demurrage has likely started.`,
+        metadata: {
+          previous_status: derived.status,
+          new_status: 'Overdue',
+          days_left: derived.days_left,
+          days_overdue: derived.days_left != null ? -Math.min(derived.days_left, 0) : null,
+          container_no: container.container_no,
+          pol: (container as any).pol ?? null,
+          pod: (container as any).pod ?? null,
+        },
+      })
+
+      if (insertError) {
+        logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to insert overdue alert', {
+          container_id: container.id,
+          error: insertError.message,
+        })
+        continue
+      }
+
+      createdAlerts++
+    } catch (error) {
+      logger.error('[backfillOverdueAlertsForCurrentOrg] Unexpected error while processing container', {
+        container_id: container.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   return {
-    totalOverdue: overdueCandidates.length,
+    totalWarnings: overdueContainers.length,
     createdAlerts,
     skippedExisting,
   }
@@ -267,178 +294,141 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
  * @returns Summary object with counts of total warning containers, created alerts, and skipped (existing) alerts
  */
 export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSummary> {
-  const { supabase, organizationId } = await getServerAuthContext()
-  const orgId = organizationId
+  const emptySummary: BackfillSummary = {
+    totalWarnings: 0,
+    createdAlerts: 0,
+    skippedExisting: 0,
+  }
 
-  // Query containers for this organization
-  // Filter to non-closed containers that have arrival_date and free_days
-  // (required to compute status)
-  const { data: containers, error } = await supabase
-    .from('containers')
-    .select('*')
-    .eq('organization_id', orgId)
-    .eq('is_closed', false)
-    .not('arrival_date', 'is', null)
-    .not('free_days', 'is', null)
-    .order('arrival_date', { ascending: true })
+  let supabase: SupabaseClient<Database>
+  let organizationId: string
 
-  if (error) {
-    logger.error('[backfillWarningAlertsForCurrentOrg] Failed to fetch containers', {
-      organization_id: orgId,
-      error: error.message,
+  try {
+    const ctx = await getServerAuthContext()
+    supabase = ctx.supabase
+    organizationId = ctx.organizationId
+
+    if (!organizationId) {
+      logger.warn('[backfillWarningAlertsForCurrentOrg] No organizationId in auth context')
+      return emptySummary
+    }
+  } catch (error) {
+    logger.error('[backfillWarningAlertsForCurrentOrg] Failed to get auth context', {
+      error: error instanceof Error ? error.message : String(error),
     })
-    throw new Error(`Failed to fetch containers: ${error.message}`)
+    return emptySummary
   }
 
-  if (!containers || containers.length === 0) {
-    return {
-      totalOverdue: 0, // Reusing BackfillSummary type - totalOverdue represents total warnings here
-      createdAlerts: 0,
-      skippedExisting: 0,
-    }
-  }
+  let containers: ContainerRecord[] = []
 
-  // Compute derived fields for each container and filter to warning ones
-  const warningCandidates: Array<{
-    id: string
-    container_no: string | null
-    days_left: number | null
-    organization_id: string
-    list_id: string | null
-    pod: string | null
-    pol: string | null
-    milestone: string | null
-    arrival_date: string | null
-    free_days: number | null
-  }> = []
+  try {
+    const { data, error } = await supabase
+      .from('containers')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('is_closed', false)
+      .not('arrival_date', 'is', null)
+      .not('free_days', 'is', null)
 
-  for (const container of containers) {
-    // Compute derived fields (status, days_left, etc.)
-    const derived = computeDerivedFields(container as ContainerRecord)
-
-    // Only include containers that are currently in Warning status
-    if (derived.status === 'Warning') {
-      warningCandidates.push({
-        id: container.id,
-        container_no: container.container_no ?? null,
-        days_left: derived.days_left,
-        organization_id: container.organization_id,
-        list_id: container.list_id ?? null,
-        pod: container.pod ?? null,
-        pol: container.pol ?? null,
-        milestone: container.milestone ?? null,
-        arrival_date: container.arrival_date ?? null,
-        free_days: container.free_days ?? null,
+    if (error) {
+      logger.error('[backfillWarningAlertsForCurrentOrg] Failed to fetch containers', {
+        organizationId,
+        error: error.message,
       })
+      return emptySummary
     }
+
+    containers = data ?? []
+    if (containers.length === 0) return emptySummary
+  } catch (error) {
+    logger.error('[backfillWarningAlertsForCurrentOrg] Unexpected error fetching containers', {
+      organizationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return emptySummary
   }
 
-  if (warningCandidates.length === 0) {
-    return {
-      totalOverdue: 0,
-      createdAlerts: 0,
-      skippedExisting: 0,
+  const warningThresholdDays = DEFAULT_WARNING_THRESHOLD_DAYS ?? 2
+  const warningContainers = []
+
+  for (const c of containers) {
+    try {
+      const derived = computeDerivedFields(c, warningThresholdDays)
+      if (derived.status === 'Warning') warningContainers.push(c)
+    } catch (error) {
+      logger.error('[backfillWarningAlertsForCurrentOrg] Failed to compute derived fields', {
+        container_id: c.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
   let createdAlerts = 0
   let skippedExisting = 0
 
-  // Process each warning container
-  for (const candidate of warningCandidates) {
-    // Check if a `became_warning` alert already exists for this container
-    const { data: existingAlerts, error: checkError } = await supabase
-      .from('alerts')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('container_id', candidate.id)
-      .eq('event_type', 'became_warning')
-      .limit(1)
+  for (const container of warningContainers) {
+    try {
+      const { data: existingAlerts, error: existingError } = await supabase
+        .from('alerts')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .eq('container_id', container.id)
+        .eq('event_type', 'became_warning')
+        .is('cleared_at', null)
+        .limit(1)
 
-    if (checkError) {
-      logger.error('[backfillWarningAlertsForCurrentOrg] Failed to check existing alerts', {
-        container_id: candidate.id,
-        error: checkError.message,
-      })
-      // Skip this container if we can't check for existing alerts
-      skippedExisting++
-      continue
-    }
-
-    // If an alert already exists, skip this container
-    if (existingAlerts && existingAlerts.length > 0) {
-      skippedExisting++
-      continue
-    }
-
-    // Get days_left for message (should be positive for warning status)
-    const daysLeft = candidate.days_left ?? 0
-
-    // Create the alert row (matching the structure from createAlertsForContainerChange)
-    const alertToInsert: Database['public']['Tables']['alerts']['Insert'] = {
-      organization_id: orgId,
-      container_id: candidate.id,
-      list_id: candidate.list_id,
-      event_type: 'became_warning',
-      severity: 'warning',
-      title: 'Free time running out',
-      message:
-        daysLeft > 0 && candidate.pod
-          ? `Container ${candidate.container_no} at ${candidate.pod} has ${daysLeft} free day${daysLeft === 1 ? '' : 's'} left.`
-          : 'This container is running low on free days.',
-      metadata: {
-        previous_status: null, // We don't know the previous status in backfill
-        new_status: 'Warning',
-        previous_days_left: null,
-        new_days_left: candidate.days_left,
-        days_left: candidate.days_left, // Include for reference
-        container_no: candidate.container_no,
-        pod: candidate.pod,
-        pol: candidate.pol ?? null,
-        milestone: candidate.milestone,
-        arrival_date: candidate.arrival_date,
-        free_days: candidate.free_days,
-        // Mark as backfilled for debugging
-        backfilled: true,
-      },
-      created_by_user_id: null, // No user action - this is a backfill
-    }
-
-    // Insert the alert
-    const { error: insertError } = await supabase.from('alerts').insert(alertToInsert)
-
-    if (insertError) {
-      logger.error('[backfillWarningAlertsForCurrentOrg] Failed to create alert', {
-        container_id: candidate.id,
-        container_no: candidate.container_no,
-        error: insertError.message,
-      })
-      // Continue processing other containers even if one fails
-      skippedExisting++
-    } else {
-      createdAlerts++
-      // Note: Email drafts are no longer auto-created for individual container events.
-      // Daily digests are generated separately via createDailyDigestDraftsForToday().
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('[backfillWarningAlertsForCurrentOrg] Created alert', {
-          container_id: candidate.id,
-          container_no: candidate.container_no,
+      if (existingError) {
+        logger.error('[backfillWarningAlertsForCurrentOrg] Failed to check existing warning alerts', {
+          container_id: container.id,
+          error: existingError.message,
         })
+        continue
       }
-    }
-  }
 
-  if (process.env.NODE_ENV === 'development') {
-    logger.debug('[backfillWarningAlertsForCurrentOrg] Backfill complete', {
-      organization_id: orgId,
-      totalWarning: warningCandidates.length,
-      createdAlerts,
-      skippedExisting,
-    })
+      if (existingAlerts?.length) {
+        skippedExisting++
+        continue
+      }
+
+      const derived = computeDerivedFields(container, warningThresholdDays)
+
+      const { error: insertError } = await supabase.from('alerts').insert({
+        organization_id: organizationId,
+        container_id: container.id,
+        list_id: container.list_id,
+        event_type: 'became_warning',
+        severity: 'warning',
+        title: 'Free time running out',
+        message: `Container ${container.container_no} is approaching the end of free time.`,
+        metadata: {
+          previous_status: derived.status,
+          new_status: 'Warning',
+          days_left: derived.days_left,
+          container_no: container.container_no,
+          pol: (container as any).pol ?? null,
+          pod: (container as any).pod ?? null,
+        },
+      })
+
+      if (insertError) {
+        logger.error('[backfillWarningAlertsForCurrentOrg] Failed to insert warning alert', {
+          container_id: container.id,
+          error: insertError.message,
+        })
+        continue
+      }
+
+      createdAlerts++
+    } catch (error) {
+      logger.error('[backfillWarningAlertsForCurrentOrg] Unexpected error while processing container', {
+        container_id: container.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   return {
-    totalOverdue: warningCandidates.length, // Reusing BackfillSummary type - totalOverdue represents total warnings here
+    totalWarnings: warningContainers.length,
     createdAlerts,
     skippedExisting,
   }
