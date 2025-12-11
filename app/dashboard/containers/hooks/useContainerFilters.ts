@@ -39,8 +39,15 @@ export function useContainerFilters(containers: ContainerRecordWithComputed[]) {
           return false
         }
       } else if (viewMode === 'detention') {
-        // Detention: only containers where has_detention is true
-        if (!container.has_detention) {
+        // Detention: only containers that are actively incurring detention charges
+        // Matches Dashboard KPI logic: has_detention must be true AND detention_chargeable_days > 0
+        // Note: If gate_out_date is missing, detention_chargeable_days will be null (computed server-side),
+        // so those containers are automatically excluded here
+        if (
+          !container.has_detention ||
+          container.detention_chargeable_days === null ||
+          container.detention_chargeable_days <= 0
+        ) {
           return false
         }
       }

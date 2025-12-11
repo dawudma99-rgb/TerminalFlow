@@ -2,6 +2,7 @@ import { backfillOverdueAlertsForCurrentOrg, backfillWarningAlertsForCurrentOrg 
 import { logger } from '@/lib/utils/logger'
 import { DashboardContent } from './DashboardContent'
 import { fetchRecentAlertsForDashboard } from '@/lib/data/alerts-actions'
+import { fetchContainers } from '@/lib/data/containers-actions'
 
 /**
  * Server component wrapper for the Dashboard page.
@@ -31,9 +32,12 @@ export default async function DashboardPage() {
     })
   })
 
-  // Fetch recent alerts for "Changes Since Yesterday" section
-  const recentAlerts = await fetchRecentAlertsForDashboard()
+  // Fetch recent alerts and containers in parallel
+  const [recentAlerts, containers] = await Promise.all([
+    fetchRecentAlertsForDashboard(),
+    fetchContainers(),
+  ])
 
   // Immediately render dashboard UI
-  return <DashboardContent recentAlerts={recentAlerts} />
+  return <DashboardContent recentAlerts={recentAlerts} containers={containers} />
 }

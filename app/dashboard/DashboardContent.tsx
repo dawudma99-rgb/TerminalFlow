@@ -1,20 +1,23 @@
 'use client'
 
-import { useContainers } from '@/lib/data/useContainers'
 import { useListsContext } from '@/components/providers/ListsProvider'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { LoadingState } from '@/components/ui/LoadingState'
-import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useMemo } from 'react'
 import { LayoutDashboard, Package, AlertTriangle, Clock, Activity, TrendingUp, DollarSign } from 'lucide-react'
 import type { AlertRow } from '@/lib/data/alerts-actions'
+import type { ContainerRecordWithComputed } from '@/lib/data/containers-actions'
 import { KpiCard } from '@/components/ui/KpiCard'
 import { CriticalIssuesCard } from '@/components/dashboard/CriticalIssuesCard'
 import { AtRiskSoonCard } from '@/components/dashboard/AtRiskSoonCard'
 import { TodaysActivityCard } from '@/components/dashboard/TodaysActivityCard'
 import { ListOverviewCard } from '@/components/dashboard/ListOverviewCard'
 import { calculateCostOfInaction } from '@/lib/analytics'
+
+type DashboardContentProps = {
+  recentAlerts: AlertRow[]
+  containers: ContainerRecordWithComputed[]
+}
 
 /**
  * Client component that renders the Dashboard UI.
@@ -27,12 +30,12 @@ import { calculateCostOfInaction } from '@/lib/analytics'
  * - Quick actions
  * 
  * The parent server component (page.tsx) handles server-side operations
- * like backfilling overdue alerts and fetching recent alerts.
+ * like backfilling overdue alerts and fetching containers.
  */
-export function DashboardContent({ recentAlerts }: { recentAlerts: AlertRow[] }) {
+export function DashboardContent({ recentAlerts, containers }: DashboardContentProps) {
   const { activeListId, lists } = useListsContext()
-  // Fetch all containers (not just active list) for dashboard overview
-  const { containers: allContainers, loading, isInitialLoading, isRefreshing, error, reload } = useContainers(null)
+  // Use containers passed from server component
+  const allContainers = containers
 
   // Create a map of list_id -> list_name for quick lookups
   const listNameMap = useMemo(() => {
@@ -151,48 +154,10 @@ export function DashboardContent({ recentAlerts }: { recentAlerts: AlertRow[] })
   const atRiskSoon = useMemo(() => atRiskSoonAll.slice(0, 5), [atRiskSoonAll])
   const atRiskSoonCount = atRiskSoonAll.length
 
-  if (isInitialLoading) {
-    return (
-      <main className="p-4 bg-[#F9FAFB] min-h-screen">
-        <header className="mb-4">
-          <h1 className="text-xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
-        </header>
-        <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
-          <CardContent className="py-12">
-            <LoadingState message="Loading dashboard..." />
-          </CardContent>
-        </Card>
-      </main>
-    )
-  }
-
-  if (error && allContainers.length === 0) {
-    return (
-      <main className="p-4 bg-[#F9FAFB] min-h-screen">
-        <header className="mb-4">
-          <h1 className="text-xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
-        </header>
-        <Card className="bg-white rounded-md border border-[#E5E7EB] shadow-sm">
-          <CardContent className="py-8">
-            <ErrorAlert 
-              message={error.message || 'Failed to load containers'}
-              onRetry={reload}
-            />
-          </CardContent>
-        </Card>
-      </main>
-    )
-  }
-
   return (
     <main className="p-4 bg-[#F9FAFB] min-h-screen">
       <header className="mb-4">
         <h1 className="text-xl font-semibold text-[#111827] tracking-tight">Dashboard</h1>
-        {isRefreshing && (
-          <span className="ml-2 text-xs text-muted-foreground">
-            Refreshing…
-          </span>
-        )}
       </header>
 
       {/* Top row: 6 KPI cards */}

@@ -418,7 +418,13 @@ export function ContainerTable({
                   </>
                 )}
                 <TableCell className="text-center">
-                  <StatusBadge status={container.status} />
+                  <StatusBadge
+                    status={
+                      viewMode === 'detention'
+                        ? container.detention_status ?? container.status
+                        : container.status
+                    }
+                  />
                 </TableCell>
                 <TableCell className="align-middle text-[13px]">
                   <TooltipProvider>
