@@ -3,7 +3,7 @@
 import { useListsContext } from '@/components/providers/ListsProvider'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { useMemo } from 'react'
+import { useMemo, useEffect, useRef } from 'react'
 import { LayoutDashboard, Package, AlertTriangle, Clock, Activity, TrendingUp, DollarSign } from 'lucide-react'
 import type { AlertRow } from '@/lib/data/alerts-actions'
 import type { ContainerRecordWithComputed } from '@/lib/data/containers-actions'
@@ -13,6 +13,10 @@ import { AtRiskSoonCard } from '@/components/dashboard/AtRiskSoonCard'
 import { TodaysActivityCard } from '@/components/dashboard/TodaysActivityCard'
 import { ListOverviewCard } from '@/components/dashboard/ListOverviewCard'
 import { calculateCostOfInaction } from '@/lib/analytics'
+import useSWR from 'swr'
+import { fetchContainers } from '@/lib/data/containers-actions'
+import { useAuth } from '@/lib/auth/useAuth'
+import { useRealtimeAlerts } from '@/lib/hooks/useRealtimeAlerts'
 
 type DashboardContentProps = {
   recentAlerts: AlertRow[]
@@ -34,8 +38,53 @@ type DashboardContentProps = {
  */
 export function DashboardContent({ recentAlerts, containers }: DashboardContentProps) {
   const { activeListId, lists } = useListsContext()
-  // Use containers passed from server component
-  const allContainers = containers
+  const { profile } = useAuth()
+  const orgId = profile?.organization_id
+  
+  // Optional: Listen to realtime alerts for trigger-based refresh
+  const { latestAlert } = useRealtimeAlerts()
+  const lastRefreshTimeRef = useRef<number>(0)
+  const DEBOUNCE_MS = 8000 // 8 seconds debounce for alert-triggered refresh
+
+  // SWR key includes organization_id to ensure proper cache isolation
+  // Only fetch when authenticated and orgId is available
+  const swrKey = orgId ? ['dashboard-containers', orgId] : null
+
+  // Client-side refresh of containers using SWR
+  // Uses server-provided containers as fallbackData for initial render (no flicker)
+  const { data: refreshedContainers, mutate } = useSWR(
+    swrKey,
+    () => fetchContainers(), // Fetch all containers (no list filter on dashboard)
+    {
+      refreshInterval: 50000, // Refresh every 50 seconds (between 45-60s requirement)
+      revalidateOnFocus: false, // Don't refetch on window focus
+      keepPreviousData: true, // Keep showing previous data until new data arrives (no flicker)
+      fallbackData: containers, // Use server props as initial data
+    }
+  )
+
+  // Use refreshed containers if available, otherwise fall back to server props
+  const allContainers = refreshedContainers ?? containers
+
+  // Optional: Trigger one-time refresh when alert arrives (debounced)
+  useEffect(() => {
+    if (!latestAlert || !orgId) return
+
+    const now = Date.now()
+    const timeSinceLastRefresh = now - lastRefreshTimeRef.current
+
+    // Debounce: only refresh if last refresh was more than DEBOUNCE_MS ago
+    if (timeSinceLastRefresh < DEBOUNCE_MS) {
+      return
+    }
+
+    // Trigger one-time refresh
+    lastRefreshTimeRef.current = now
+    mutate().catch((error) => {
+      // Silently handle errors - don't break UI if refresh fails
+      console.error('[DashboardContent] Alert-triggered refresh failed:', error)
+    })
+  }, [latestAlert, orgId, mutate])
 
   // Create a map of list_id -> list_name for quick lookups
   const listNameMap = useMemo(() => {
