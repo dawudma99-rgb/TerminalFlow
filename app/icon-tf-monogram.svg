@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- TF monogram using exact TerminalFlow brand typography -->
+  <!-- Matched to top-tier SaaS favicons (Gmail, GitHub, Linear) -->
+  <!-- Scale: 75% of canvas (384px font size) - increased by ~13% for visual presence -->
+  <!-- Padding: 12.5% (64px) on all sides - equal perceived spacing -->
+  <!-- Baseline at y=377: lowered 2px to compensate for top-heavy letterforms, optically centered -->
+  <text x="256" y="377" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="384" font-weight="800" letter-spacing="-0.04em" text-anchor="middle" fill="#1E3A8A" style="text-rendering: optimizeLegibility;">
+    TF
+  </text>
+</svg>
+
