@@ -61,6 +61,14 @@ interface ContainerTableProps {
   onSelectionChange?: (ids: string[]) => void
 }
 
+const DAY_IN_MS = 86400000
+
+function startOfDay(date: Date): Date {
+  const next = new Date(date.getTime())
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
 function formatDate(dateString?: string | null): string {
   if (!dateString) return '—'
   try {
@@ -283,6 +291,9 @@ export function ContainerTable({
               <>
                 <TableHead className="w-32">Gate Out</TableHead>
                 <TableHead className="w-32 text-right">Detention Free Days</TableHead>
+                {viewMode === 'detention' && (
+                  <TableHead className="w-24 text-right">Days Left</TableHead>
+                )}
                 <TableHead className="w-32 text-right">Detention Rate</TableHead>
               </>
             )}
@@ -405,6 +416,39 @@ export function ContainerTable({
                     <TableCell className="text-right tabular-nums text-slate-600">
                       {container.detention_free_days ?? '—'}
                     </TableCell>
+                    {viewMode === 'detention' && (() => {
+                      // Calculate detention days left
+                      const today = startOfDay(new Date())
+                      let detentionDaysLeft: number | null = null
+
+                      if (container.detention_chargeable_days !== null && container.detention_chargeable_days > 0) {
+                        // Detention has started: show negative days (mirror demurrage style)
+                        detentionDaysLeft = -container.detention_chargeable_days
+                      } else if (container.lfd_date) {
+                        // Detention not started yet: days until LFD
+                        const lfd = startOfDay(new Date(container.lfd_date))
+                        const diffMs = lfd.getTime() - today.getTime()
+                        detentionDaysLeft = Math.floor(diffMs / DAY_IN_MS)
+                      } else {
+                        // No LFD (e.g. missing gate_out_date) → we don't know
+                        detentionDaysLeft = null
+                      }
+
+                      return (
+                        <TableCell
+                          className={clsx(
+                            'text-right tabular-nums font-semibold',
+                            detentionDaysLeft !== null && detentionDaysLeft < 0
+                              ? 'text-[#B91C1C]'
+                              : detentionDaysLeft !== null && detentionDaysLeft <= 2
+                                ? 'text-[#B45309]'
+                                : 'text-[#1E293B]'
+                          )}
+                        >
+                          {detentionDaysLeft === null ? '—' : detentionDaysLeft}
+                        </TableCell>
+                      )
+                    })()}
                     <TableCell className="text-right tabular-nums text-slate-600">
                       {container.days_left != null && container.days_left < 0 && container.detention_fees
                         ? `£${container.detention_fees.toLocaleString()}`

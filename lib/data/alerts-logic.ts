@@ -14,6 +14,39 @@ import { loadSettings } from '@/lib/data/settings-actions'
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
 /**
+ * Check if an alert of the given event type already exists for a container.
+ * Only considers uncleared alerts (cleared_at IS NULL).
+ */
+async function alertAlreadyExists(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  containerId: string,
+  eventType: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('container_id', containerId)
+    .eq('event_type', eventType)
+    .is('cleared_at', null)
+    .limit(1)
+
+  if (error) {
+    // Log error but don't throw - if check fails, we'll create the alert to be safe
+    logger.error('[alertAlreadyExists] Failed to check existing alert', {
+      organization_id: organizationId,
+      container_id: containerId,
+      event_type: eventType,
+      error: error.message,
+    })
+    return false // Return false to allow alert creation if check fails
+  }
+
+  return (data?.length ?? 0) > 0
+}
+
+/**
  * Creates alert records for container state changes.
  * 
  * Detects V1 events:
@@ -61,7 +94,15 @@ export async function createAlertsForContainerChange(params: {
   const oldStatus = oldDerived?.status ?? null
   const newStatus = newDerived.status
   if ((oldStatus === 'Safe' || oldStatus === null) && newStatus === 'Warning') {
-    alertsToCreate.push({
+    // Check if alert already exists before creating
+    const exists = await alertAlreadyExists(
+      supabase,
+      newContainer.organization_id,
+      newContainer.id,
+      'became_warning'
+    )
+    if (!exists) {
+      alertsToCreate.push({
       organization_id: newContainer.organization_id,
       container_id: newContainer.id,
       list_id: newContainer.list_id,
@@ -82,7 +123,8 @@ export async function createAlertsForContainerChange(params: {
         milestone: newContainer.milestone,
       },
       created_by_user_id: currentUserId ?? null,
-    })
+      })
+    }
 
     // Note: Email drafts are no longer auto-created for individual container events.
     // Daily digests are generated separately via createDailyDigestDraftsForToday().
@@ -91,8 +133,16 @@ export async function createAlertsForContainerChange(params: {
   // 2) Became OVERDUE (cost started - demurrage begins when overdue)
   // Condition: previous status != 'Overdue' AND new status = 'Overdue'
   if (oldStatus !== 'Overdue' && newStatus === 'Overdue') {
-    const daysOverdue = newDerived.days_left !== null ? Math.abs(newDerived.days_left) : 0
-    alertsToCreate.push({
+    // Check if alert already exists before creating (protects against duplicates and previousContainer fetch failures)
+    const exists = await alertAlreadyExists(
+      supabase,
+      newContainer.organization_id,
+      newContainer.id,
+      'became_overdue'
+    )
+    if (!exists) {
+      const daysOverdue = newDerived.days_left !== null ? Math.abs(newDerived.days_left) : 0
+      alertsToCreate.push({
       organization_id: newContainer.organization_id,
       container_id: newContainer.id,
       list_id: newContainer.list_id,
@@ -115,7 +165,8 @@ export async function createAlertsForContainerChange(params: {
         estimated_demurrage_fees: newDerived.demurrage_fees > 0 ? newDerived.demurrage_fees : undefined,
       },
       created_by_user_id: currentUserId ?? null,
-    })
+      })
+    }
 
     // Note: Email drafts are no longer auto-created for individual container events.
     // Daily digests are generated separately via createDailyDigestDraftsForToday().
@@ -129,7 +180,15 @@ export async function createAlertsForContainerChange(params: {
     (oldDetentionDays === null || oldDetentionDays <= 0) &&
     newDetentionDays !== null && newDetentionDays > 0
   ) {
-    alertsToCreate.push({
+    // Check if alert already exists before creating
+    const exists = await alertAlreadyExists(
+      supabase,
+      newContainer.organization_id,
+      newContainer.id,
+      'detention_started'
+    )
+    if (!exists) {
+      alertsToCreate.push({
       organization_id: newContainer.organization_id,
       container_id: newContainer.id,
       list_id: newContainer.list_id,
@@ -152,7 +211,8 @@ export async function createAlertsForContainerChange(params: {
         estimated_detention_fees: newDerived.detention_fees > 0 ? newDerived.detention_fees : undefined,
       },
       created_by_user_id: currentUserId ?? null,
-    })
+      })
+    }
 
     // Note: Email drafts are no longer auto-created for individual container events.
     // Daily digests are generated separately via createDailyDigestDraftsForToday().
@@ -163,7 +223,15 @@ export async function createAlertsForContainerChange(params: {
   const oldIsClosed = previousContainer?.is_closed ?? false
   const newIsClosed = newContainer.is_closed
   if (!oldIsClosed && newIsClosed) {
-    alertsToCreate.push({
+    // Check if alert already exists before creating
+    const exists = await alertAlreadyExists(
+      supabase,
+      newContainer.organization_id,
+      newContainer.id,
+      'container_closed'
+    )
+    if (!exists) {
+      alertsToCreate.push({
       organization_id: newContainer.organization_id,
       container_id: newContainer.id,
       list_id: newContainer.list_id,
@@ -182,7 +250,8 @@ export async function createAlertsForContainerChange(params: {
         final_days_left: newDerived.days_left,
       },
       created_by_user_id: currentUserId ?? null,
-    })
+      })
+    }
   }
 
   // Insert all alerts if any were detected
