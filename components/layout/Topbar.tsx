@@ -1,13 +1,11 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { signOut } from '@/lib/auth/actions'
 import { useAuth } from '@/lib/auth/useAuth'
 import { useEffect, useState, memo } from 'react'
 import { getCurrentOrganization } from '@/lib/data/organization-actions'
-import { useTheme } from 'next-themes'
-import { LogOut, Moon, Sun, Loader2 } from 'lucide-react'
+import { LogOut, Loader2 } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 import { AlertsBell } from '@/components/alerts/AlertsBell'
 import { PortflowLogo } from '@/components/ui/PortflowLogo'
@@ -18,7 +16,6 @@ export const Topbar = memo(function Topbar() {
   const { user, profile, loading } = useAuth()
   const [orgName, setOrgName] = useState('')
   const [isSigningOut, setIsSigningOut] = useState(false)
-  const { theme, setTheme } = useTheme()
   const router = useRouter()
 
   useEffect(() => {
@@ -78,14 +75,6 @@ export const Topbar = memo(function Topbar() {
             <span className="text-sm text-muted-foreground">
               {profile?.email || user?.email || '...'}
             </span>
-            <div className="flex items-center gap-2">
-              <Sun className="h-4 w-4 text-muted-foreground" />
-              <Switch
-                checked={theme === 'dark'}
-                onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-              />
-              <Moon className="h-4 w-4 text-muted-foreground" />
-            </div>
             <Button 
               variant="outline" 
               size="sm" 

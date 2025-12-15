@@ -1,6 +1,6 @@
 # TerminalFlow Application Architecture & Code Report
 
-**Generated:** 2025-01-27  
+**Generated:** 2025-01-27 (Updated)  
 **Application:** TerminalFlow (formerly D&D Copilot)  
 **Version:** 0.1.0  
 **Framework:** Next.js 14 (App Router)
@@ -39,6 +39,10 @@
 - **CSV/Excel Import**: Bulk import containers from spreadsheets
 - **Analytics Dashboard**: Cost analysis, port performance, and risk assessment
 - **Activity History**: Complete audit trail of container changes
+- **Public Landing Page**: Marketing site with feature showcase and pricing information
+- **Overdue Alert Backfill**: Automatic detection and alert creation for overdue/warning containers
+- **Email History**: View and manage sent email drafts
+- **User Profile Management**: Profile settings and preferences
 
 ### Target Users
 
@@ -577,7 +581,18 @@ USING (
 5. Inserts alerts into `alerts` table
 6. Sends emails for critical alerts (see Email section)
 
-**Important:** Alerts are only created when users update containers. No scheduled checks - system is event-driven.
+**Alert Backfill System:**
+
+**File:** `lib/data/overdue-sweep.ts`
+
+The dashboard automatically runs backfill functions on page load to ensure alerts exist for containers that became overdue or entered warning status without manual updates:
+
+- **`backfillOverdueAlertsForCurrentOrg()`**: Creates alerts for containers that are overdue but don't have alerts
+- **`backfillWarningAlertsForCurrentOrg()`**: Creates alerts for containers in warning status without alerts
+- Runs automatically when dashboard page loads (non-blocking)
+- Ensures all overdue/warning containers have corresponding alerts for visibility
+
+**Important:** Primary alert creation happens when users update containers (event-driven). Backfill ensures historical containers have alerts even if they became overdue before the alert system was active.
 
 ---
 
@@ -943,6 +958,48 @@ logger.debug('Container fetched', { containerId })
 
 ---
 
+### 11. Public Pages
+
+#### Landing Page (`app/page.tsx`)
+- **Public marketing site** (no authentication required)
+- Hero section with value proposition
+- Feature showcase with screenshots
+- Problem/solution sections
+- Call-to-action buttons
+- Redirects authenticated users to `/dashboard`
+
+#### Pricing Page (`app/pricing/page.tsx`)
+- **Public pricing information**
+- Early Access and Team plan details
+- Feature comparison
+- Contact information for sales inquiries
+
+---
+
+### 12. Additional Data Management Features
+
+#### Carrier Defaults (`lib/data/carrier-actions.ts`)
+- Save default fee structures per carrier
+- Auto-populate container forms with carrier defaults
+- Manage carrier-specific tiered rates
+
+#### Data Export/Import (`lib/data/data-management-actions.ts`)
+- Export all organization data
+- Import organization data from backup
+- Clear organization data (with confirmation)
+- Seed demo data for testing
+
+#### User & Organization Management
+- **User Actions** (`lib/data/user-actions.ts`): Profile management, organization lookup
+- **Organization Actions** (`lib/data/organization-actions.ts`): Organization information
+- **Settings Actions** (`lib/data/settings-actions.ts`): User and organization settings
+
+#### History & Export
+- **History Actions** (`lib/data/history-actions.ts`): Activity log management, clear history
+- **Export Actions** (`lib/data/export-actions.ts`): CSV export with filtering
+
+---
+
 ## State Management
 
 ### SWR (Stale-While-Revalidate)
@@ -1124,6 +1181,20 @@ Background refresh every 60 seconds
 - Alerts bell (unread count + dropdown)
 - Logout button
 
+#### `PublicShell` (`components/layout/PublicShell.tsx`)
+- Layout wrapper for public pages (landing, pricing)
+- Includes PublicHeader and PublicFooter
+- No authentication required
+
+#### `PublicHeader` (`components/layout/PublicHeader.tsx`)
+- TerminalFlow logo
+- Navigation links
+- Login/Get Started CTA
+
+#### `PublicFooter` (`components/layout/PublicFooter.tsx`)
+- Footer content for public pages
+- Links and company information
+
 ---
 
 ### Container Components
@@ -1231,6 +1302,24 @@ Located in `components/ui/`:
 
 ---
 
+### `/api/debug/overdue-candidates` (GET)
+**File:** `app/api/debug/overdue-candidates/route.ts`
+
+**Purpose:** Debug endpoint to view containers that would trigger overdue alerts
+
+**Returns:** List of overdue candidates with container details
+
+---
+
+### `/api/debug/backfill-overdue-alerts` (POST)
+**File:** `app/api/debug/backfill-overdue-alerts/route.ts`
+
+**Purpose:** Debug endpoint to manually trigger overdue alert backfill
+
+**Returns:** Summary of alerts created
+
+---
+
 ### `/dashboard/containers/export` (GET)
 **File:** `app/dashboard/containers/export/route.ts`
 
@@ -1284,6 +1373,12 @@ dnd-copilot-next/
 │   ├── forms/                    # Form components
 │   ├── import/                   # Import dialog
 │   ├── layout/                   # Layout components
+│   │   ├── AppLayout.tsx         # Dashboard layout
+│   │   ├── PublicShell.tsx       # Public page layout
+│   │   ├── PublicHeader.tsx      # Public header
+│   │   ├── PublicFooter.tsx     # Public footer
+│   │   ├── Sidebar.tsx          # Dashboard sidebar
+│   │   └── Topbar.tsx           # Dashboard topbar
 │   ├── lists/                    # List management
 │   ├── providers/                # Context providers
 │   └── ui/                       # Reusable UI components
@@ -1294,13 +1389,29 @@ dnd-copilot-next/
 │   │   ├── actions.ts            # Server actions (signIn, signOut)
 │   │   └── useAuth.ts            # Client hook
 │   ├── config/                   # Configuration
+│   │   ├── env.ts               # Environment variables
+│   │   └── sentry-env.ts        # Sentry configuration
+│   ├── constants/                # Application constants
+│   │   ├── containers.ts        # Container-related constants
+│   │   └── nav.ts               # Navigation constants
+│   ├── csv/                      # CSV utilities
+│   │   └── containers-serializer.ts # Container CSV serialization
 │   ├── data/                     # Data layer (Supabase operations)
 │   │   ├── alerts-actions.ts    # Alert CRUD
 │   │   ├── alerts-logic.ts      # Alert creation logic
+│   │   ├── carrier-actions.ts   # Carrier defaults management
 │   │   ├── containers-actions.ts # Container CRUD
+│   │   ├── data-management-actions.ts # Data export/import/clear
 │   │   ├── email-drafts-actions.ts # Email draft management
+│   │   ├── export-actions.ts    # CSV export functionality
+│   │   ├── history-actions.ts   # Activity history
 │   │   ├── lists-actions.ts      # List CRUD
+│   │   ├── organization-actions.ts # Organization management
+│   │   ├── overdue-sweep.ts     # Alert backfill for overdue/warning
+│   │   ├── settings-actions.ts  # User/organization settings
+│   │   ├── user-actions.ts      # User profile management
 │   │   ├── import-commit.ts     # CSV import
+│   │   ├── migrateLegacyMilestones.ts # Legacy data migration
 │   │   ├── useContainers.ts     # Container hook
 │   │   └── useLists.ts          # Lists hook
 │   ├── email/                    # Email sending & formatting
@@ -1308,8 +1419,18 @@ dnd-copilot-next/
 │   │   ├── dailyDigestFormatter.ts # Daily digest content builder
 │   │   └── sendAlertEmail.ts    # Resend helper
 │   ├── hooks/                    # Custom hooks
+│   │   ├── useClientSearchParams.ts # URL search params hook
 │   │   └── useRealtimeAlerts.ts # Real-time alert subscription
 │   ├── import/                   # Import utilities
+│   │   ├── error-report.ts      # Import error reporting
+│   │   ├── fields.ts            # Field definitions
+│   │   ├── header-map.ts        # Header mapping
+│   │   ├── parser.ts            # File parsing
+│   │   └── validate.ts          # Validation logic
+│   ├── rate-limit/              # Rate limiting
+│   │   └── simpleLimiter.ts    # Simple rate limiter
+│   ├── types/                    # Type definitions
+│   │   └── containers.ts        # Container types
 │   ├── supabase/                 # Supabase clients
 │   │   ├── server.ts            # Server client
 │   │   ├── client.ts            # Browser client
@@ -1317,16 +1438,28 @@ dnd-copilot-next/
 │   ├── utils/                    # Utility functions
 │   │   ├── containers.ts        # Derived fields computation
 │   │   ├── date-range.ts        # UTC date range helpers
+│   │   ├── download-csv.ts      # CSV download helper
+│   │   ├── download.ts          # File download utilities
+│   │   ├── error-handler.ts     # Error handling utilities
 │   │   ├── milestones.ts        # Milestone resolution
-│   │   └── logger.ts            # Logging utility
+│   │   ├── logger.ts            # Logging utility
+│   │   └── navigation.ts        # Navigation helpers
+│   ├── utils.ts                 # General utilities
 │   └── tierUtils.ts             # Tiered fee calculations
 │
 ├── types/                        # TypeScript types
 │   └── database.ts              # Supabase-generated types
 │
 ├── middleware.ts                 # Next.js middleware (auth)
+├── instrumentation.ts            # Next.js instrumentation (Sentry)
+├── sentry.client.config.ts      # Sentry client config
+├── sentry.server.config.ts      # Sentry server config
+├── sentry.edge.config.ts        # Sentry edge config
+├── next.config.js               # Next.js configuration
 ├── package.json                  # Dependencies
-└── tsconfig.json                 # TypeScript config
+├── tsconfig.json                 # TypeScript config
+└── public/                       # Static assets
+    └── images/                   # Marketing images
 ```
 
 ---

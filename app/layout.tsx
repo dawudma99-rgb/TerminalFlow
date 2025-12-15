@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorHandlerProvider } from "@/components/ErrorHandlerProvider";
 import { AuthTransitionProvider } from "@/components/ui/AuthTransition";
 import { Toaster } from "sonner";
@@ -36,19 +35,12 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <GlobalErrorBoundary>
           <ErrorHandlerProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <AuthTransitionProvider>
-                <AuthProvider>
-                  {children}
-                  <Toaster position="top-right" richColors />
-                </AuthProvider>
-              </AuthTransitionProvider>
-            </ThemeProvider>
+            <AuthTransitionProvider>
+              <AuthProvider>
+                {children}
+                <Toaster position="top-right" richColors />
+              </AuthProvider>
+            </AuthTransitionProvider>
           </ErrorHandlerProvider>
         </GlobalErrorBoundary>
       </body>

@@ -30,7 +30,6 @@ interface ListsProviderProps {
  * ListsProvider component
  * 
  * Wraps the app with list management context.
- * Must be used within the app's provider hierarchy (after ThemeProvider).
  */
 export function ListsProvider({ children }: ListsProviderProps) {
   const listsData = useLists()
