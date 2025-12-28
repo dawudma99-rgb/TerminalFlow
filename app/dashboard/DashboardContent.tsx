@@ -17,6 +17,7 @@ import useSWR from 'swr'
 import { fetchContainers } from '@/lib/data/containers-actions'
 import { useAuth } from '@/lib/auth/useAuth'
 import { useRealtimeAlerts } from '@/lib/hooks/useRealtimeAlerts'
+import { getTodayUtcRange } from '@/lib/utils/date-range'
 
 type DashboardContentProps = {
   recentAlerts: AlertRow[]
@@ -127,15 +128,14 @@ export function DashboardContent({ recentAlerts, containers }: DashboardContentP
       (c) => c.detention_chargeable_days !== null && c.detention_chargeable_days > 0
     ).length
 
-    // New in last 24h: containers created or with first arrival in last 24h
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    // New today: containers created today (in UTC)
+    // Only check created_at, not arrival_date, since we want containers that were
+    // actually added to the system today, not containers with arrival dates today
+    const { start: startOfToday, end: now } = getTodayUtcRange()
     const newIn24h = allContainers.filter((c) => {
-      const createdAt = c.created_at ? new Date(c.created_at) : null
-      const arrivalDate = c.arrival_date ? new Date(c.arrival_date) : null
-      return (
-        (createdAt && createdAt >= twentyFourHoursAgo) ||
-        (arrivalDate && arrivalDate >= twentyFourHoursAgo)
-      )
+      if (!c.created_at) return false
+      const createdAt = new Date(c.created_at)
+      return createdAt >= startOfToday && createdAt <= now
     }).length
 
     return { total, overdue, atRisk, detentionRunning, newIn24h }
