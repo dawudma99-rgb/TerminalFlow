@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { AddContainerForm } from '@/components/forms/AddContainerForm'
+import { AddContainerForm, type ContainerFormData } from '@/components/forms/AddContainerForm'
 import { Plus } from 'lucide-react'
 import { insertContainer, type ClientContainerInput } from '@/lib/data/containers-actions'
 import type { Json } from '@/types/database'
@@ -24,27 +24,7 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
 
   const defaultMilestone: ContainerMilestone = DEFAULT_MILESTONE
 
-  const handleSave = async (data: {
-    container_no: string
-    bl_number: string
-    pol: string
-    pod: string
-    arrival_date: string
-    free_days: number
-    carrier: string | null
-    container_size: string | null
-    assigned_to: string
-    milestone: ContainerMilestone
-    demurrage_enabled: boolean
-    demurrage_flat_rate: number
-    demurrage_tiers: Tier[]
-    detention_enabled: boolean
-    detention_flat_rate: number
-    detention_tiers: Tier[]
-    gate_out_date: string
-    empty_return_date: string
-    notes: string
-  }) => {
+  const handleSave = async (data: ContainerFormData) => {
     try {
       // Normalize date fields: empty string -> null
       const normalizeDate = (dateStr: string): string | null => {

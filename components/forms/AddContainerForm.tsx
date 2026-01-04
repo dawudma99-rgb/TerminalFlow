@@ -139,7 +139,7 @@ interface AddContainerFormProps {
   onSave?: (data: ContainerFormData) => void
 }
 
-interface ContainerFormData {
+export interface ContainerFormData {
   // Basic Information
   container_no: string
   bl_number: string
