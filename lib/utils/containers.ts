@@ -14,6 +14,30 @@ type ContainerRow = Database['public']['Tables']['containers']['Row']
 
 export type ContainerStatus = 'Safe' | 'Warning' | 'Overdue' | 'Closed'
 
+/**
+ * Container with computed derived fields.
+ * Extends the database ContainerRow type with computed fields.
+ */
+export type DerivedContainer = ContainerRow & {
+  days_left: number | null
+  status: ContainerStatus
+  demurrage_fees: number
+  detention_fees: number
+  lfd_date: string | null
+  detention_chargeable_days: number | null
+  detention_status: 'Safe' | 'Warning' | 'Overdue' | null
+}
+
+/**
+ * @deprecated Use DerivedContainer instead. This type is kept for backward compatibility.
+ * Will be removed in a future version.
+ */
+export type ContainerWithDerivedFields = DerivedContainer
+
+/**
+ * @deprecated This custom interface is deprecated. Use ContainerRow from database types instead.
+ * Kept for backward compatibility only - compute functions no longer use this type.
+ */
 export interface ContainerRecord {
   id: string
   arrival_date?: ContainerRow['arrival_date'] | null
@@ -28,6 +52,7 @@ export interface ContainerRecord {
   detention_tiers?: Tier[] | ContainerRow['detention_tiers']
   detention_fee_rate?: ContainerRow['detention_fee_rate'] | null
   has_detention?: ContainerRow['has_detention'] | null
+  weekend_chargeable?: ContainerRow['weekend_chargeable']
   container_no?: ContainerRow['container_no']
   bl_number?: ContainerRow['bl_number'] | null
   carrier?: ContainerRow['carrier']
@@ -39,17 +64,6 @@ export interface ContainerRecord {
   pol?: string | null
   pod?: string | null
   lfd_date?: ContainerRow['lfd_date'] | null
-}
-
-export interface ContainerWithDerivedFields extends ContainerRecord {
-  days_left: number | null
-  status: ContainerStatus
-  demurrage_fees: number
-  detention_fees: number
-  // lfd_date is inherited from ContainerRecord, but we override it here to ensure it's computed
-  lfd_date: string | null
-  detention_chargeable_days: number | null
-  detention_status: 'Safe' | 'Warning' | 'Overdue' | null
 }
 
 type TierLike = {
@@ -69,7 +83,7 @@ function toNumber(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-function normalizeTierArray(source?: ContainerRecord['demurrage_tiers']): Tier[] | undefined {
+function normalizeTierArray(source?: ContainerRow['demurrage_tiers']): Tier[] | undefined {
   if (!source || !Array.isArray(source)) return undefined
 
   const tiers: Tier[] = []
@@ -110,11 +124,11 @@ function normalizeTierArray(source?: ContainerRecord['demurrage_tiers']): Tier[]
   return tiers.length > 0 ? tiers : undefined
 }
 
-function resolveTierArray(source?: ContainerRecord['demurrage_tiers']): Tier[] | undefined {
+function resolveTierArray(source?: ContainerRow['demurrage_tiers']): Tier[] | undefined {
   return normalizeTierArray(source)
 }
 
-function resolveFeeRate(value?: ContainerRecord['demurrage_fee_if_late'] | ContainerRecord['detention_fee_rate'] | null): number | undefined {
+function resolveFeeRate(value?: ContainerRow['demurrage_fee_if_late'] | ContainerRow['detention_fee_rate'] | null): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
@@ -124,6 +138,118 @@ function startOfDay(date: Date): Date {
   const next = new Date(date.getTime())
   next.setHours(0, 0, 0, 0)
   return next
+}
+
+/**
+ * Add chargeable days to a start date, optionally excluding weekends.
+ * @param startDate - Starting date
+ * @param daysToAdd - Number of days to add
+ * @param includeWeekends - If false, skip Saturday (6) and Sunday (0)
+ * @returns New date after adding chargeable days
+ */
+export function addChargeableDays(startDate: Date, daysToAdd: number, includeWeekends: boolean): Date {
+  const normalized = startOfDay(startDate)
+  let current = new Date(normalized.getTime())
+  let daysAdded = 0
+
+  while (daysAdded < daysToAdd) {
+    current = new Date(current.getTime() + DAY_IN_MS)
+    const dayOfWeek = current.getDay()
+    
+    if (includeWeekends || (dayOfWeek !== 0 && dayOfWeek !== 6)) {
+      daysAdded++
+    }
+  }
+
+  return startOfDay(current)
+}
+
+/**
+ * Count chargeable days between two dates, optionally excluding weekends.
+ * @param startDate - Starting date (inclusive)
+ * @param endDate - Ending date (exclusive - days up to but not including this date)
+ * @param includeWeekends - If false, skip Saturday (6) and Sunday (0)
+ * @returns Number of chargeable days between the dates
+ */
+export function countChargeableDaysBetween(startDate: Date, endDate: Date, includeWeekends: boolean): number {
+  const normalizedStart = startOfDay(startDate)
+  const normalizedEnd = startOfDay(endDate)
+
+  if (normalizedEnd.getTime() <= normalizedStart.getTime()) {
+    return 0
+  }
+
+  let count = 0
+  let current = new Date(normalizedStart.getTime())
+
+  while (current.getTime() < normalizedEnd.getTime()) {
+    const dayOfWeek = current.getDay()
+    
+    if (includeWeekends || (dayOfWeek !== 0 && dayOfWeek !== 6)) {
+      count++
+    }
+    
+    current = new Date(current.getTime() + DAY_IN_MS)
+  }
+
+  return count
+}
+
+/**
+ * Derive Last Free Day (LFD) from arrival date and free days.
+ * Uses weekend-aware logic based on includeWeekends flag.
+ * @param arrivalDate - Arrival date string (ISO or DD/MM/YYYY)
+ * @param freeDays - Number of free days
+ * @param includeWeekends - Whether to include weekends in calculation
+ * @returns LFD Date object, or null if arrival date is invalid
+ */
+export function deriveLfdFromFreeDays(
+  arrivalDate: string | null | undefined,
+  freeDays: number,
+  includeWeekends: boolean
+): Date | null {
+  if (!arrivalDate) return null
+  
+  const arrival = parseDateFlexible(arrivalDate)
+  if (!arrival) return null
+  
+  const normalizedArrival = startOfDay(arrival)
+  return addChargeableDays(normalizedArrival, freeDays, includeWeekends)
+}
+
+/**
+ * Derive free days from arrival date and Last Free Day (LFD).
+ * Counts chargeable days from arrival to LFD (inclusive of LFD day).
+ * Uses weekend-aware logic based on includeWeekends flag.
+ * @param arrivalDate - Arrival date string (ISO or DD/MM/YYYY)
+ * @param lfdDate - Last Free Day date string (ISO or DD/MM/YYYY)
+ * @param includeWeekends - Whether to include weekends in calculation
+ * @returns Number of free days, or null if dates are invalid
+ */
+export function deriveFreeDaysFromLfd(
+  arrivalDate: string | null | undefined,
+  lfdDate: string | null | undefined,
+  includeWeekends: boolean
+): number | null {
+  if (!arrivalDate || !lfdDate) return null
+  
+  const arrival = parseDateFlexible(arrivalDate)
+  const lfd = parseDateFlexible(lfdDate)
+  
+  if (!arrival || !lfd) return null
+  
+  const normalizedArrival = startOfDay(arrival)
+  const normalizedLfd = startOfDay(lfd)
+  
+  // LFD must be after or equal to arrival
+  if (normalizedLfd.getTime() < normalizedArrival.getTime()) {
+    return null
+  }
+  
+  // Count chargeable days from arrival to LFD (inclusive)
+  // Since LFD is the last free day, we count up to and including LFD
+  const lfdPlusOne = new Date(normalizedLfd.getTime() + DAY_IN_MS)
+  return countChargeableDaysBetween(normalizedArrival, lfdPlusOne, includeWeekends)
 }
 
 /**
@@ -148,27 +274,50 @@ export function parseDateFlexible(value?: string | null): Date | null {
 
 /**
  * Calculate how many days are left until the Last Free Day (LFD).
+ * @param arrival - Arrival date string
+ * @param freeDays - Number of free days
+ * @param includeWeekends - Whether to include weekends in calculation (default: true for backward compatibility)
  */
-export function computeDaysLeft(arrival?: string | null, freeDays = 7): number | null {
+export function computeDaysLeft(arrival?: string | null, freeDays = 7, includeWeekends = true): number | null {
   const arrivalDate = parseDateFlexible(arrival)
   if (!arrivalDate) return null
 
   const now = new Date()
-  const diff = (arrivalDate.getTime() + freeDays * 86400000) - now.getTime()
-  return Math.ceil(diff / 86400000)
+  const nowNormalized = startOfDay(now)
+  const normalizedArrival = startOfDay(arrivalDate)
+
+  if (includeWeekends) {
+    // Original behavior: simple calendar day calculation
+    const expiryDate = new Date(normalizedArrival.getTime() + freeDays * DAY_IN_MS)
+    const diff = expiryDate.getTime() - nowNormalized.getTime()
+    return Math.ceil(diff / DAY_IN_MS)
+  } else {
+    // Weekend-aware: calculate expiry using business days, then count business days until expiry
+    const expiryDate = addChargeableDays(normalizedArrival, freeDays, false)
+    const daysLeft = countChargeableDaysBetween(nowNormalized, expiryDate, false)
+    
+    // If expiry has passed, return negative days
+    if (expiryDate.getTime() < nowNormalized.getTime()) {
+      const daysOverdue = countChargeableDaysBetween(expiryDate, nowNormalized, false)
+      return -daysOverdue
+    }
+    
+    return daysLeft
+  }
 }
 
 /**
  * Compute the container status.
- * @param c - Container record
+ * @param c - Container record from database
  * @param warningThresholdDays - Days before free time ends to trigger Warning (default: 2)
  */
 export function computeContainerStatus(
-  c: ContainerRecord,
+  c: ContainerRow,
   warningThresholdDays: number = 2
 ): ContainerStatus {
   if (c.is_closed) return 'Closed'
-  const daysLeft = computeDaysLeft(c.arrival_date, c.free_days ?? 7)
+  const includeWeekends = c.weekend_chargeable
+  const daysLeft = computeDaysLeft(c.arrival_date, c.free_days ?? 7, includeWeekends)
   if (daysLeft === null) return 'Safe'
   if (daysLeft > warningThresholdDays) return 'Safe'
   if (daysLeft > 0) return 'Warning'
@@ -177,19 +326,37 @@ export function computeContainerStatus(
 
 /**
  * Compute derived fields (status, days_left, etc.)
- * @param c - Container record
+ * @param c - Container record from database
  * @param warningThresholdDays - Days before free time ends to trigger Warning (optional, uses default if not provided)
  */
 export function computeDerivedFields(
-  c: ContainerRecord,
+  c: ContainerRow,
   warningThresholdDays?: number
-): ContainerWithDerivedFields {
-  const days_left = computeDaysLeft(c.arrival_date, c.free_days ?? 7)
+): DerivedContainer {
+  const includeWeekends = c.weekend_chargeable
+  const days_left = computeDaysLeft(c.arrival_date, c.free_days ?? 7, includeWeekends)
   const status = computeContainerStatus(c, warningThresholdDays)
   const demurrageTiers = resolveTierArray(c.demurrage_tiers)
   const detentionTiers = resolveTierArray(c.detention_tiers)
   const demurrageRate = resolveFeeRate(c.demurrage_fee_if_late)
   const detentionRate = resolveFeeRate(c.detention_fee_rate)
+  
+  // Calculate demurrage LFD (Last Free Day)
+  let demurrageLfdDate: string | null = null
+  if (c.arrival_date) {
+    const arrivalDate = parseDateFlexible(c.arrival_date)
+    if (arrivalDate) {
+      const normalizedArrival = startOfDay(arrivalDate)
+      const freeDays = c.free_days ?? 7
+      const lfdDateObj = includeWeekends
+        ? new Date(normalizedArrival.getTime() + freeDays * DAY_IN_MS)
+        : addChargeableDays(normalizedArrival, freeDays, false)
+      
+      if (!Number.isNaN(lfdDateObj.getTime())) {
+        demurrageLfdDate = startOfDay(lfdDateObj).toISOString()
+      }
+    }
+  }
   
   // Calculate demurrage fees if overdue
   let demurrage_fees = 0
@@ -233,17 +400,17 @@ export function computeDerivedFields(
 
     if (gateOut) {
       const endDate = emptyReturn || new Date()
-      const lfdDateObj = new Date(gateOut.getTime() + detentionFreeDays * DAY_IN_MS)
+      const normalizedGateOut = startOfDay(gateOut)
+      
+      const lfdDateObj = includeWeekends
+        ? new Date(normalizedGateOut.getTime() + detentionFreeDays * DAY_IN_MS)
+        : addChargeableDays(normalizedGateOut, detentionFreeDays, false)
 
       if (!Number.isNaN(lfdDateObj.getTime())) {
         const normalizedLfd = startOfDay(lfdDateObj)
         const normalizedEnd = startOfDay(endDate)
-        const diffMs = normalizedEnd.getTime() - normalizedLfd.getTime()
 
-        if (!Number.isNaN(diffMs)) {
-          const diffDays = Math.floor(diffMs / DAY_IN_MS)
-          detentionChargeableDays = diffDays > 0 ? diffDays : 0
-        }
+        detentionChargeableDays = countChargeableDaysBetween(normalizedLfd, normalizedEnd, includeWeekends)
 
         computedLfdDate = normalizedLfd.toISOString()
       }
@@ -291,7 +458,7 @@ export function computeDerivedFields(
     status,
     demurrage_fees,
     detention_fees,
-    lfd_date: computedLfdDate ?? c.lfd_date ?? null,
+    lfd_date: computedLfdDate ?? demurrageLfdDate ?? c.lfd_date ?? null,
     detention_chargeable_days: detentionChargeableDays,
     detention_status: detentionStatus
   }

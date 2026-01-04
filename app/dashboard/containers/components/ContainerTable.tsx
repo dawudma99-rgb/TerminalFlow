@@ -282,8 +282,51 @@ export function ContainerTable({
             {viewMode !== 'detention' && (
               <>
                 <TableHead className="w-32">Arrival</TableHead>
-                <TableHead className="w-24 text-right">Free Days</TableHead>
-                <TableHead className="w-24 text-right">Days Left</TableHead>
+                <TableHead className="w-24 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Free Days</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Number of chargeable days before demurrage begins.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </TableHead>
+                <TableHead className="w-32">
+                  <div className="flex items-center gap-1">
+                    <span>LFD</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Last Free Day. Demurrage starts on the next chargeable day.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </TableHead>
+                <TableHead className="w-24 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Days Left</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Remaining chargeable days. When weekends are excluded, this value pauses over weekends.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </TableHead>
                 <TableHead className="w-28 text-right">Demurrage</TableHead>
               </>
             )}
@@ -386,6 +429,7 @@ export function ContainerTable({
                     <TableCell className="text-right tabular-nums text-slate-600">
                       {container.free_days ?? '—'}
                     </TableCell>
+                    <TableCell className="text-slate-600">{formatDate(container.lfd_date)}</TableCell>
                     <TableCell
                       className={clsx(
                         'text-right tabular-nums font-semibold',

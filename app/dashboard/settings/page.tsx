@@ -14,12 +14,12 @@ import {
   exportOrgData,
   importOrgData,
   clearOrgData,
-  seedDemoData,
 } from '@/lib/data/data-management-actions'
 import {
   getAllCarrierDefaults,
   saveCarrierDefaults,
   deleteCarrierDefaults,
+  updateCarrierName,
   type CarrierDefaults,
 } from '@/lib/data/carrier-actions'
 import { DemurrageTierEditor } from '@/components/forms/DemurrageTierEditor'
@@ -29,9 +29,6 @@ import {
   Download,
   Upload,
   Trash2,
-  FlaskConical,
-  DollarSign,
-  Calendar,
   Settings as SettingsIcon,
   Database,
   Package,
@@ -60,14 +57,35 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const [clearing, setClearing] = useState(false)
-  const [seeding, setSeeding] = useState(false)
   const [carrierDefaults, setCarrierDefaults] = useState<CarrierDefaults[]>([])
   const [loadingCarriers, setLoadingCarriers] = useState(true)
   const [editingCarrier, setEditingCarrier] = useState<string | null>(null)
   const [editingCarrierName, setEditingCarrierName] = useState<string>('')
+  const [editingCarrierOriginalName, setEditingCarrierOriginalName] = useState<string>('')
   const [demurrageTiers, setDemurrageTiers] = useState<Tier[]>([])
   const [detentionTiers, setDetentionTiers] = useState<Tier[]>([])
+  const [demurrageFreeDays, setDemurrageFreeDays] = useState<number>(7)
+  const [detentionFreeDays, setDetentionFreeDays] = useState<number>(7)
+  const [demurrageFlatRate, setDemurrageFlatRate] = useState<number>(0)
+  const [detentionFlatRate, setDetentionFlatRate] = useState<number>(0)
   const [savingCarrier, setSavingCarrier] = useState(false)
+  // Local string states for inputs to allow clearing
+  const [demurrageFreeDaysInput, setDemurrageFreeDaysInput] = useState<string>('7')
+  const [demurrageFlatRateInput, setDemurrageFlatRateInput] = useState<string>('0')
+  const [detentionFlatRateInput, setDetentionFlatRateInput] = useState<string>('0')
+
+  // Sync input states with number states when they change from external sources
+  useEffect(() => {
+    setDemurrageFreeDaysInput(String(demurrageFreeDays))
+  }, [demurrageFreeDays])
+
+  useEffect(() => {
+    setDemurrageFlatRateInput(String(demurrageFlatRate))
+  }, [demurrageFlatRate])
+
+  useEffect(() => {
+    setDetentionFlatRateInput(String(detentionFlatRate))
+  }, [detentionFlatRate])
 
   // Load settings on mount
   useEffect(() => {
@@ -95,19 +113,15 @@ export default function SettingsPage() {
         setSettingsLoading(false)
         
         // Load carrier defaults after settings
-        if (profile?.organization_id) {
-          getAllCarrierDefaults(profile.organization_id)
-            .then((carrierData) => {
-              setCarrierDefaults(carrierData)
-            })
-            .catch((err) => {
-              logger.error('Failed to load carrier defaults', err)
-              toast.error('Failed to load carrier defaults')
-            })
-            .finally(() => setLoadingCarriers(false))
-        } else {
-          setLoadingCarriers(false)
-        }
+        getAllCarrierDefaults()
+          .then((carrierData) => {
+            setCarrierDefaults(carrierData)
+          })
+          .catch((err) => {
+            logger.error('Failed to load carrier defaults', err)
+            toast.error('Failed to load carrier defaults')
+          })
+          .finally(() => setLoadingCarriers(false))
       })
       .catch((err) => {
         logger.error('[settings-page] Failed to load settings:', err)
@@ -121,6 +135,8 @@ export default function SettingsPage() {
           weekendChargeable: true,
           daysBeforeFreeTimeWarning: 2,
         }
+        // Note: Fee, free days, and weekend charging settings are no longer shown in UI
+        // but kept in defaults for backward compatibility
         setSettings(defaults)
         setSettingsLoading(false)
         setLoadingCarriers(false)
@@ -173,9 +189,9 @@ export default function SettingsPage() {
         setImporting(true)
         const text = await file.text()
         await importOrgData(text)
-      toast.success('Data imported successfully')
-      // Refresh the page to show new data
-      router.refresh()
+        toast.success('Data imported successfully')
+        // Refresh the page to show new data
+        router.refresh()
       } catch (err) {
         logger.error('Import failed:', err)
         toast.error(err instanceof Error ? err.message : 'Import failed')
@@ -184,22 +200,6 @@ export default function SettingsPage() {
       }
     }
     input.click()
-  }
-
-  const handleSeedDemo = async () => {
-    if (!user || !profile?.organization_id) return
-    try {
-      setSeeding(true)
-      await seedDemoData()
-      toast.success('Demo data seeded successfully')
-      // Refresh the page to show new data
-      router.refresh()
-    } catch (err) {
-      logger.error('Seeding failed:', err)
-      toast.error(err instanceof Error ? err.message : 'Seeding failed')
-    } finally {
-      setSeeding(false)
-    }
   }
 
   const handleClearData = async () => {
@@ -241,165 +241,30 @@ export default function SettingsPage() {
   return (
     <main className="bg-[#F3F4F6] min-h-screen px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto flex max-w-4xl flex-col gap-6">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="flex items-center gap-2 text-2xl font-semibold text-[#111827]">
-                  <SettingsIcon className="h-6 w-6 text-[#2563EB]" />
-                  Settings & Configuration
-                </h1>
-                <p className="text-sm text-[#6B7280]">
-                  Manage fee defaults, carrier presets, and organization data controls.
-                </p>
-              </div>
-              <Button onClick={handleSaveSettings} disabled={saving} className="w-full md:w-auto">
-                {saving ? 'Saving…' : 'Save Settings'}
-              </Button>
+          {/* Header */}
+          <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-semibold text-[#111827]">
+                <SettingsIcon className="h-6 w-6 text-[#2563EB]" />
+                Settings
+              </h1>
+              <p className="text-sm text-[#6B7280] mt-1">
+                Manage alerts, carrier templates, and organization data.
+              </p>
             </div>
-          </div>
-
-        {/* Fee Configuration */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Fee Configuration
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="demurrageDailyRate">Demurrage Daily Rate (£)</Label>
-                <Input
-                  id="demurrageDailyRate"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={settings.demurrageDailyRate}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      demurrageDailyRate: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Default daily rate for demurrage charges
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="detentionDailyRate">Detention Daily Rate (£)</Label>
-                <Input
-                  id="detentionDailyRate"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={settings.detentionDailyRate}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      detentionDailyRate: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Default daily rate for detention charges
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Free Days Configuration */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              Free Days Configuration
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="demFreeDays">Demurrage Free Days</Label>
-                <Input
-                  id="demFreeDays"
-                  type="number"
-                  min="0"
-                  max="30"
-                  value={settings.demFreeDays}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      demFreeDays: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Number of free days before demurrage charges apply
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="detFreeDays">Detention Free Days</Label>
-                <Input
-                  id="detFreeDays"
-                  type="number"
-                  min="0"
-                  max="30"
-                  value={settings.detFreeDays}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      detFreeDays: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Number of free days before detention charges apply
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Weekend Charging */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>Weekend Charging</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="weekendChargeable"
-                checked={settings.weekendChargeable}
-                onCheckedChange={(checked) =>
-                  setSettings({ ...settings, weekendChargeable: checked })
-                }
-              />
-              <Label htmlFor="weekendChargeable" className="cursor-pointer">
-                Include weekends in detention calculations
-              </Label>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              When unchecked, weekends are excluded from detention free day calculations. This
-              affects how detention fees are calculated for containers.
-            </p>
-          </CardContent>
-        </Card>
+          </section>
 
         {/* Alert Settings */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5 text-primary" />
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-[#111827]">
+              <Bell className="h-5 w-5 text-[#2563EB]" />
               Alert Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h2>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="daysBeforeFreeTimeWarning">
+              <Label htmlFor="daysBeforeFreeTimeWarning" className="text-sm font-medium text-[#111827]">
                 Warn me X days before free time ends
               </Label>
               <Input
@@ -414,43 +279,64 @@ export default function SettingsPage() {
                     daysBeforeFreeTimeWarning: parseInt(e.target.value) || 2,
                   })
                 }
+                className="max-w-xs"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-[#6B7280]">
                 Containers will enter "Warning" status this many days before free time expires.
                 Default: 2 days.
               </p>
             </div>
-          </CardContent>
-        </Card>
+            <Button onClick={handleSaveSettings} disabled={saving} className="w-full sm:w-auto">
+              {saving ? 'Saving…' : 'Save Alert Settings'}
+            </Button>
+          </div>
+        </section>
 
-        {/* Carrier Defaults */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              Carrier Defaults
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* Carrier Fee Templates */}
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-[#111827]">
+              <Package className="h-5 w-5 text-[#2563EB]" />
+              Carrier Fee Templates
+            </h2>
+            <p className="text-sm text-[#6B7280] mt-1">
+              Manage fee templates for each carrier. These templates auto-fill when creating containers.
+            </p>
+          </div>
+          <div className="space-y-4">
             {loadingCarriers ? (
               <p className="text-sm text-muted-foreground">Loading carrier defaults...</p>
             ) : carrierDefaults.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No carrier defaults yet. Add one below.
+                No carrier templates yet. Add one below.
               </p>
             ) : (
               <div className="space-y-3">
-                {carrierDefaults.map((cd) => (
-                  <div
-                    key={cd.id}
-                    className="flex justify-between items-center border rounded-lg p-3 hover:bg-muted/30"
-                  >
-                    <div>
-                      <p className="font-medium">{cd.carrier_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {cd.demurrage_tiers.length} demurrage / {cd.detention_tiers.length} detention tiers
-                      </p>
-                    </div>
+                {carrierDefaults.map((cd) => {
+                  const demSummary = cd.demurrage_tiers.length > 0
+                    ? `${cd.demurrage_free_days ?? 7} free / Tiered (${cd.demurrage_tiers.length} tiers)`
+                    : cd.demurrage_flat_rate
+                      ? `${cd.demurrage_free_days ?? 7} free / £${cd.demurrage_flat_rate.toFixed(2)} flat`
+                      : `${cd.demurrage_free_days ?? 7} free / Not configured`
+                  
+                  const detSummary = cd.detention_tiers.length > 0
+                    ? `${cd.detention_free_days ?? 7} free / Tiered (${cd.detention_tiers.length} tiers)`
+                    : cd.detention_flat_rate
+                      ? `${cd.detention_free_days ?? 7} free / £${cd.detention_flat_rate.toFixed(2)} flat`
+                      : `${cd.detention_free_days ?? 7} free / Not configured`
+                  
+                  return (
+                    <div
+                      key={cd.id}
+                      className="flex justify-between items-center border rounded-lg p-3 hover:bg-muted/30"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium">{cd.carrier_name}</p>
+                        <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                          <p>Demurrage: {demSummary}</p>
+                          <p>Detention: {detSummary}</p>
+                        </div>
+                      </div>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -458,33 +344,64 @@ export default function SettingsPage() {
                         onClick={() => {
                           setEditingCarrier(cd.id)
                           setEditingCarrierName(cd.carrier_name)
+                          setEditingCarrierOriginalName(cd.carrier_name)
                           setDemurrageTiers(cd.demurrage_tiers)
                           setDetentionTiers(cd.detention_tiers)
+                          setDemurrageFreeDays(cd.demurrage_free_days ?? 7)
+                          setDetentionFreeDays(cd.detention_free_days ?? 7)
+                          setDemurrageFlatRate(cd.demurrage_flat_rate ?? 0)
+                          setDetentionFlatRate(cd.detention_flat_rate ?? 0)
                         }}
                       >
                         Edit
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={async () => {
-                          if (!profile?.organization_id) return
-                          try {
-                            await deleteCarrierDefaults(cd.carrier_name, profile.organization_id)
-                            toast.success(`Deleted defaults for ${cd.carrier_name}`)
-                            const updated = carrierDefaults.filter((x) => x.id !== cd.id)
-                            setCarrierDefaults(updated)
-                          } catch (err) {
-                            toast.error('Failed to delete carrier defaults')
-                            logger.error('Failed to delete carrier defaults:', err)
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Carrier Template?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              <div className="space-y-2">
+                                <p>
+                                  Are you sure you want to delete the template for <strong>{cd.carrier_name}</strong>?
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  This will remove the template from future use. Existing containers created with this carrier will not be affected and will continue to use their saved fee configurations.
+                                </p>
+                              </div>
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={async () => {
+                                try {
+                                  await deleteCarrierDefaults(cd.carrier_name)
+                                  toast.success(`Deleted template for ${cd.carrier_name}`)
+                                  const updated = carrierDefaults.filter((x) => x.id !== cd.id)
+                                  setCarrierDefaults(updated)
+                                } catch (err) {
+                                  toast.error('Failed to delete carrier template')
+                                  logger.error('Failed to delete carrier template:', err)
+                                }
+                              }}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
 
@@ -494,25 +411,30 @@ export default function SettingsPage() {
               onClick={() => {
                 setEditingCarrier('new')
                 setEditingCarrierName('')
+                setEditingCarrierOriginalName('')
                 setDemurrageTiers([])
                 setDetentionTiers([])
+                setDemurrageFreeDays(7)
+                setDetentionFreeDays(7)
+                setDemurrageFlatRate(0)
+                setDetentionFlatRate(0)
               }}
             >
               <PlusCircle className="w-4 h-4 mr-2" />
-              Add Carrier Default
+              Add Carrier Template
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         {/* Data Management */}
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5 text-primary" />
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-[#111827]">
+              <Database className="h-5 w-5 text-[#2563EB]" />
               Data Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h2>
+          </div>
+          <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Manage your organization&apos;s data. These actions are organization-scoped and
               cannot be undone.
@@ -531,15 +453,6 @@ export default function SettingsPage() {
               >
                 <Upload className="w-4 h-4 mr-2" />
                 {importing ? 'Importing...' : 'Import Data'}
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={handleSeedDemo}
-                disabled={seeding || !profile.organization_id}
-              >
-                <FlaskConical className="w-4 h-4 mr-2" />
-                {seeding ? 'Seeding...' : 'Seed Demo Data'}
               </Button>
 
               <AlertDialog>
@@ -573,8 +486,8 @@ export default function SettingsPage() {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         {/* Carrier Default Editor Modal */}
         {editingCarrier && (
@@ -582,78 +495,228 @@ export default function SettingsPage() {
             if (!open) {
               setEditingCarrier(null)
               setEditingCarrierName('')
+              setEditingCarrierOriginalName('')
               setDemurrageTiers([])
               setDetentionTiers([])
+              setDemurrageFreeDays(7)
+              setDetentionFreeDays(7)
+              setDemurrageFlatRate(0)
+              setDetentionFlatRate(0)
             }
           }}>
             <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  Carrier Defaults: {editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
+                  {editingCarrier === 'new' ? 'New Carrier Template' : `Edit Carrier Template: ${editingCarrierName}`}
                 </AlertDialogTitle>
               </AlertDialogHeader>
               <AlertDialogDescription asChild>
                 <div className="space-y-6 p-2">
-                  {editingCarrier === 'new' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="carrierNameInput">Carrier Name</Label>
-                      <Input
-                        id="carrierNameInput"
-                        value={editingCarrierName}
-                        onChange={(e) => setEditingCarrierName(e.target.value)}
-                        placeholder="e.g., Maersk, MSC, CMA CGM"
-                        className="bg-background"
-                      />
+                  <div className="space-y-2">
+                    <Label htmlFor="carrierNameInput">Carrier Name</Label>
+                    <Input
+                      id="carrierNameInput"
+                      value={editingCarrierName}
+                      onChange={(e) => setEditingCarrierName(e.target.value)}
+                      placeholder="e.g., Maersk, MSC, CMA CGM"
+                      className="bg-background"
+                    />
+                  </div>
+
+                  {/* Demurrage Configuration */}
+                  <div className="space-y-4 border rounded-lg p-4">
+                    <h4 className="font-medium text-sm">Demurrage Configuration</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="demFreeDays">Free Days</Label>
+                        <Input
+                          id="demFreeDays"
+                          type="number"
+                          min="0"
+                          max="30"
+                          value={demurrageFreeDaysInput}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setDemurrageFreeDaysInput(value)
+                            if (value !== '') {
+                              const numValue = parseInt(value, 10)
+                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 365) {
+                                setDemurrageFreeDays(numValue)
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value
+                            const numValue = parseInt(value, 10)
+                            if (value === '' || isNaN(numValue) || numValue < 1) {
+                              setDemurrageFreeDaysInput('7')
+                              setDemurrageFreeDays(7)
+                            } else {
+                              setDemurrageFreeDaysInput(String(demurrageFreeDays))
+                            }
+                          }}
+                          className="bg-background"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="demFlatRate">Flat Rate (£/day) - Optional</Label>
+                        <Input
+                          id="demFlatRate"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={demurrageFlatRateInput}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setDemurrageFlatRateInput(value)
+                            if (value !== '') {
+                              const numValue = parseFloat(value)
+                              if (!isNaN(numValue) && numValue >= 0) {
+                                setDemurrageFlatRate(numValue)
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value
+                            const numValue = parseFloat(value)
+                            if (value === '' || isNaN(numValue) || numValue < 0) {
+                              setDemurrageFlatRateInput('0')
+                              setDemurrageFlatRate(0)
+                            } else {
+                              setDemurrageFlatRateInput(String(demurrageFlatRate))
+                            }
+                          }}
+                          className="bg-background"
+                          placeholder="0.00"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Used if no tiers configured
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  <DemurrageTierEditor
-                    tiers={demurrageTiers}
-                    onTiersChange={setDemurrageTiers}
-                    carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
-                  />
-                  <DetentionTierEditor
-                    tiers={detentionTiers}
-                    onTiersChange={setDetentionTiers}
-                    carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
-                  />
+                    <DemurrageTierEditor
+                      tiers={demurrageTiers}
+                      onTiersChange={setDemurrageTiers}
+                      carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
+                    />
+                  </div>
+
+                  {/* Detention Configuration */}
+                  <div className="space-y-4 border rounded-lg p-4">
+                    <h4 className="font-medium text-sm">Detention Configuration</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="detFreeDays">Free Days</Label>
+                        <Input
+                          id="detFreeDays"
+                          type="number"
+                          min="0"
+                          max="30"
+                          value={detentionFreeDays}
+                          onChange={(e) => setDetentionFreeDays(parseInt(e.target.value) || 7)}
+                          className="bg-background"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="detFlatRate">Flat Rate (£/day) - Optional</Label>
+                        <Input
+                          id="detFlatRate"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={detentionFlatRateInput}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setDetentionFlatRateInput(value)
+                            if (value !== '') {
+                              const numValue = parseFloat(value)
+                              if (!isNaN(numValue) && numValue >= 0) {
+                                setDetentionFlatRate(numValue)
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value
+                            const numValue = parseFloat(value)
+                            if (value === '' || isNaN(numValue) || numValue < 0) {
+                              setDetentionFlatRateInput('0')
+                              setDetentionFlatRate(0)
+                            } else {
+                              setDetentionFlatRateInput(String(detentionFlatRate))
+                            }
+                          }}
+                          className="bg-background"
+                          placeholder="0.00"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Used if no tiers configured
+                        </p>
+                      </div>
+                    </div>
+                    <DetentionTierEditor
+                      tiers={detentionTiers}
+                      onTiersChange={setDetentionTiers}
+                      carrier={editingCarrierName || editingCarrier === 'new' ? 'New Carrier' : editingCarrierName}
+                    />
+                  </div>
                 </div>
               </AlertDialogDescription>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => {
                   setEditingCarrier(null)
                   setEditingCarrierName('')
+                  setEditingCarrierOriginalName('')
                   setDemurrageTiers([])
                   setDetentionTiers([])
+                  setDemurrageFreeDays(7)
+                  setDetentionFreeDays(7)
+                  setDemurrageFlatRate(0)
+                  setDetentionFlatRate(0)
                 }}>
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
-                  disabled={savingCarrier || (editingCarrier === 'new' && !editingCarrierName.trim())}
+                  disabled={savingCarrier || !editingCarrierName.trim()}
                   onClick={async () => {
-                    if (!profile?.organization_id) return
-                    if (editingCarrier === 'new' && !editingCarrierName.trim()) {
-                      toast.error('Please enter a carrier name')
+                    const carrierName = editingCarrierName.trim()
+                    if (!carrierName || carrierName.length === 0) {
+                      toast.error('Carrier name cannot be empty or whitespace only')
                       return
                     }
                     try {
                       setSavingCarrier(true)
-                      const carrierName = editingCarrier === 'new' ? editingCarrierName.trim() : editingCarrierName
+                      
+                      // Handle rename if name changed
+                      if (editingCarrier !== 'new' && editingCarrierOriginalName !== carrierName) {
+                        await updateCarrierName(editingCarrierOriginalName, carrierName)
+                      }
+                      
                       await saveCarrierDefaults(
                         carrierName,
-                        profile.organization_id,
                         demurrageTiers,
-                        detentionTiers
+                        detentionTiers,
+                        {
+                          demurrage_free_days: demurrageFreeDays,
+                          detention_free_days: detentionFreeDays,
+                          demurrage_flat_rate: demurrageFlatRate > 0 ? demurrageFlatRate : undefined,
+                          detention_flat_rate: detentionFlatRate > 0 ? detentionFlatRate : undefined,
+                        }
                       )
-                      toast.success(`Carrier defaults saved for ${carrierName}`)
+                      toast.success(`Carrier template saved for ${carrierName}`)
                       setEditingCarrier(null)
                       setEditingCarrierName('')
+                      setEditingCarrierOriginalName('')
                       setDemurrageTiers([])
                       setDetentionTiers([])
-                      const updated = await getAllCarrierDefaults(profile.organization_id)
+                      setDemurrageFreeDays(7)
+                      setDetentionFreeDays(7)
+                      setDemurrageFlatRate(0)
+                      setDetentionFlatRate(0)
+                      const updated = await getAllCarrierDefaults()
                       setCarrierDefaults(updated)
                     } catch (err) {
-                      toast.error('Failed to save carrier defaults')
-                      logger.error('Failed to save carrier defaults:', err)
+                      toast.error(err instanceof Error ? err.message : 'Failed to save carrier template')
+                      logger.error('Failed to save carrier template:', err)
                     } finally {
                       setSavingCarrier(false)
                     }

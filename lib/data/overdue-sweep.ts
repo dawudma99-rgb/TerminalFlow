@@ -11,6 +11,22 @@ import { getServerAuthContext } from '@/lib/auth/serverAuthContext'
 const DEFAULT_WARNING_THRESHOLD_DAYS = 2
 
 /**
+ * Check if an error is a duplicate key violation for the alerts unique constraint.
+ * Returns true if the error is for constraint 'ux_alerts_one_active_per_container_event'.
+ */
+function isDuplicateAlertError(error: { code?: string; message?: string; details?: string }): boolean {
+  // PostgreSQL unique constraint violation code
+  if (error.code !== '23505') {
+    return false
+  }
+
+  // Check if this is our specific constraint violation
+  const constraintName = 'ux_alerts_one_active_per_container_event'
+  const errorText = `${error.message || ''} ${error.details || ''}`.toLowerCase()
+  return errorText.includes(constraintName.toLowerCase())
+}
+
+/**
  * Type for the overdue candidate result.
  * Contains essential fields for debugging purposes.
  */
@@ -80,7 +96,7 @@ export async function getOverdueCandidatesForCurrentOrg(): Promise<OverdueCandid
 
   for (const container of containers) {
     // Compute derived fields (status, days_left, etc.)
-    const derived = computeDerivedFields(container as ContainerRecord)
+    const derived = computeDerivedFields(container)
 
     // Only include containers that are currently overdue
     if (derived.status === 'Overdue') {
@@ -257,6 +273,14 @@ export async function backfillOverdueAlertsForCurrentOrg(): Promise<BackfillSumm
       })
 
       if (insertError) {
+        // Silently ignore duplicate key violations - this is expected when multiple paths race
+        if (isDuplicateAlertError(insertError)) {
+          // Alert already exists, which is the desired state - count as skipped
+          skippedExisting++
+          continue
+        }
+
+        // Log other errors
         logger.error('[backfillOverdueAlertsForCurrentOrg] Failed to insert overdue alert', {
           container_id: container.id,
           error: insertError.message,
@@ -411,6 +435,14 @@ export async function backfillWarningAlertsForCurrentOrg(): Promise<BackfillSumm
       })
 
       if (insertError) {
+        // Silently ignore duplicate key violations - this is expected when multiple paths race
+        if (isDuplicateAlertError(insertError)) {
+          // Alert already exists, which is the desired state - count as skipped
+          skippedExisting++
+          continue
+        }
+
+        // Log other errors
         logger.error('[backfillWarningAlertsForCurrentOrg] Failed to insert warning alert', {
           container_id: container.id,
           error: insertError.message,

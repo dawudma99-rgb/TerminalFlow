@@ -43,6 +43,7 @@ export type ClientContainerInput = {
   demurrage_tiers: Json | null
   detention_tiers: Json | null
   has_detention: boolean
+  weekend_chargeable?: boolean
 }
 
 // Extended types that include pol and pod fields used in the codebase
@@ -120,12 +121,10 @@ export async function fetchContainers(listId?: string | null): Promise<Container
   })
 
   // Apply computeDerivedFields to each item to get status and days_left
-  // The database ContainerRecord has all fields that ContainerRecord (from utils) needs
-  // computeDerivedFields returns ContainerWithDerivedFields which extends ContainerRecord
+  // computeDerivedFields accepts ContainerRow (database type) and returns DerivedContainer
   const withDerived: ContainerRecordWithComputed[] = data.map((c: ContainerRecord) => {
-    const computed = computeDerivedFields(c as Parameters<typeof computeDerivedFields>[0])
+    const computed = computeDerivedFields(c)
     // Merge database fields with computed fields
-    // Type assertion is safe because ContainerRecordWithComputed includes all DB fields plus computed
     return { ...c, ...computed } as ContainerRecordWithComputed
   })
 
@@ -200,6 +199,7 @@ export async function insertContainer(
     demurrage_tiers: container.demurrage_tiers,
     detention_tiers: container.detention_tiers,
     has_detention: container.has_detention,
+    weekend_chargeable: container.weekend_chargeable ?? true,
   }
 
   logger.debug('[insertContainer] payload', {

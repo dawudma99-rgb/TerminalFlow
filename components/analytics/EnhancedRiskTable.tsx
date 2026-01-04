@@ -127,3 +127,4 @@ export function EnhancedRiskTable({ data, limit = 20 }: EnhancedRiskTableProps) 
   )
 }
 
+

@@ -8,6 +8,7 @@ import { sendAlertEmail } from '@/lib/email/sendAlertEmail'
 import { getServerAuthContext, type ServerAuthContext } from '@/lib/auth/serverAuthContext'
 import { buildDailyDigestForList } from '@/lib/email/dailyDigestFormatter'
 import { computeDerivedFields, type ContainerWithDerivedFields } from '@/lib/utils/containers'
+import { revalidatePath } from 'next/cache'
 
 export type EmailDraftRow = Database['public']['Tables']['email_drafts']['Row']
 type ContainerRow = Database['public']['Tables']['containers']['Row']
@@ -522,6 +523,64 @@ export async function sendClientEmailForDraft(params: {
 
     return { ok: false, error: `Unexpected error: ${errorMessage}` }
   }
+}
+
+/**
+ * Delete a pending email draft.
+ * Only allows deletion of drafts that belong to the current organization and have status='pending'.
+ * Sent drafts cannot be deleted.
+ */
+export async function deleteEmailDraft(draftId: string): Promise<{ ok: boolean; error?: string }> {
+  const { supabase, context } = await resolveOrgContext()
+
+  if (!context) {
+    return { ok: false, error: 'User not authenticated' }
+  }
+
+  // Fetch the draft to verify it exists, belongs to the org, and is pending
+  const { data: existingDraft, error: fetchError } = await supabase
+    .from('email_drafts')
+    .select('*')
+    .eq('id', draftId)
+    .eq('organization_id', context.organizationId)
+    .eq('status', PENDING_STATUS)
+    .single()
+
+  if (fetchError || !existingDraft) {
+    logger.warn('[email-drafts-actions] Draft not found or not pending for deletion', {
+      draft_id: draftId,
+      organization_id: context.organizationId,
+      error: fetchError?.message,
+    })
+    return { ok: false, error: 'Draft not found or cannot be deleted (only pending drafts can be deleted)' }
+  }
+
+  // Delete the draft
+  const { error: deleteError } = await supabase
+    .from('email_drafts')
+    .delete()
+    .eq('id', draftId)
+    .eq('organization_id', context.organizationId)
+    .eq('status', PENDING_STATUS)
+
+  if (deleteError) {
+    logger.error('[email-drafts-actions] Failed to delete email draft', {
+      draft_id: draftId,
+      organization_id: context.organizationId,
+      error: deleteError.message,
+    })
+    return { ok: false, error: `Failed to delete draft: ${deleteError.message}` }
+  }
+
+  logger.info('[email-drafts-actions] Email draft deleted successfully', {
+    draft_id: draftId,
+    organization_id: context.organizationId,
+  })
+
+  // Revalidate the client updates page
+  revalidatePath('/dashboard/client-updates')
+
+  return { ok: true }
 }
 
 export type { ClientEmailEventType } from '@/lib/email/clientEmailFormatter'

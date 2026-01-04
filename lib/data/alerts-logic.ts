@@ -14,6 +14,22 @@ import { loadSettings } from '@/lib/data/settings-actions'
 type ContainerRow = Database['public']['Tables']['containers']['Row']
 
 /**
+ * Check if an error is a duplicate key violation for the alerts unique constraint.
+ * Returns true if the error is for constraint 'ux_alerts_one_active_per_container_event'.
+ */
+function isDuplicateAlertError(error: { code?: string; message?: string; details?: string }): boolean {
+  // PostgreSQL unique constraint violation code
+  if (error.code !== '23505') {
+    return false
+  }
+
+  // Check if this is our specific constraint violation
+  const constraintName = 'ux_alerts_one_active_per_container_event'
+  const errorText = `${error.message || ''} ${error.details || ''}`.toLowerCase()
+  return errorText.includes(constraintName.toLowerCase())
+}
+
+/**
  * Check if an alert of the given event type already exists for a container.
  * Only considers uncleared alerts (cleared_at IS NULL).
  */
@@ -270,7 +286,13 @@ export async function createAlertsForContainerChange(params: {
       .insert(alertsToCreate)
 
     if (error) {
-      // Log error but don't throw - we don't want to break the main container update
+      // Silently ignore duplicate key violations - this is expected when multiple paths race
+      if (isDuplicateAlertError(error)) {
+        // Do nothing - alert already exists, which is the desired state
+        return
+      }
+
+      // Log other errors but don't throw - we don't want to break the main container update
       logger.error('[createAlertsForContainerChange] Failed to create alerts', {
         container_id: newContainer.id,
         error: error.message,

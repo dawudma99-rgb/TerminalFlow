@@ -39,6 +39,11 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [newTier, setNewTier] = useState<Tier>({ from_day: 1, to_day: null, rate: 0 })
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+  // Local string states for inputs to allow clearing
+  const [fromDayInput, setFromDayInput] = useState<string>('1')
+  const [rateInput, setRateInput] = useState<string>('0')
+  const [editFromDayInput, setEditFromDayInput] = useState<string>('1')
+  const [editRateInput, setEditRateInput] = useState<string>('0')
 
   const handleAddTier = () => {
     try {
@@ -46,6 +51,8 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
       onTiersChange(updatedTiers)
       setIsAddDialogOpen(false)
       setNewTier({ from_day: 1, to_day: null, rate: 0 })
+      setFromDayInput('1')
+      setRateInput('0')
       setValidationErrors([])
     } catch (error) {
       setValidationErrors([error instanceof Error ? error.message : 'Invalid tier configuration'])
@@ -58,6 +65,8 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
       onTiersChange(updatedTiers)
       setEditingIndex(null)
       setNewTier({ from_day: 1, to_day: null, rate: 0 })
+      setEditFromDayInput('1')
+      setEditRateInput('0')
       setValidationErrors([])
     } catch (error) {
       setValidationErrors([error instanceof Error ? error.message : 'Invalid tier configuration'])
@@ -74,14 +83,19 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
   }
 
   const startEdit = (index: number) => {
+    const tier = tiers[index]
     setEditingIndex(index)
-    setNewTier({ ...tiers[index] })
+    setNewTier({ ...tier })
+    setEditFromDayInput(String(tier.from_day))
+    setEditRateInput(String(tier.rate))
     setValidationErrors([])
   }
 
   const cancelEdit = () => {
     setEditingIndex(null)
     setNewTier({ from_day: 1, to_day: null, rate: 0 })
+    setEditFromDayInput('1')
+    setEditRateInput('0')
     setValidationErrors([])
   }
 
@@ -173,8 +187,27 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
                 <Input
                   id="from_day"
                   type="number"
-                  value={newTier.from_day}
-                  onChange={(e) => setNewTier(prev => ({ ...prev, from_day: parseInt(e.target.value) || 1 }))}
+                  value={fromDayInput}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFromDayInput(value)
+                    if (value !== '') {
+                      const numValue = parseInt(value, 10)
+                      if (!isNaN(numValue) && numValue >= 1) {
+                        setNewTier(prev => ({ ...prev, from_day: numValue }))
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value
+                    const numValue = parseInt(value, 10)
+                    if (value === '' || isNaN(numValue) || numValue < 1) {
+                      setFromDayInput('1')
+                      setNewTier(prev => ({ ...prev, from_day: 1 }))
+                    } else {
+                      setFromDayInput(String(newTier.from_day))
+                    }
+                  }}
                   min="1"
                   className="bg-background"
                 />
@@ -205,8 +238,27 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
               <Input
                 id="rate"
                 type="number"
-                value={newTier.rate}
-                onChange={(e) => setNewTier(prev => ({ ...prev, rate: parseFloat(e.target.value) || 0 }))}
+                value={rateInput}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setRateInput(value)
+                  if (value !== '') {
+                    const numValue = parseFloat(value)
+                    if (!isNaN(numValue) && numValue >= 0) {
+                      setNewTier(prev => ({ ...prev, rate: numValue }))
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value
+                  const numValue = parseFloat(value)
+                  if (value === '' || isNaN(numValue) || numValue < 0) {
+                    setRateInput('0')
+                    setNewTier(prev => ({ ...prev, rate: 0 }))
+                  } else {
+                    setRateInput(String(newTier.rate))
+                  }
+                }}
                 min="0"
                 step="0.01"
                 className="bg-background"
@@ -268,8 +320,27 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
                 <Input
                   id="edit_from_day"
                   type="number"
-                  value={newTier.from_day}
-                  onChange={(e) => setNewTier(prev => ({ ...prev, from_day: parseInt(e.target.value) || 1 }))}
+                  value={editFromDayInput}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setEditFromDayInput(value)
+                    if (value !== '') {
+                      const numValue = parseInt(value, 10)
+                      if (!isNaN(numValue) && numValue >= 1) {
+                        setNewTier(prev => ({ ...prev, from_day: numValue }))
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value
+                    const numValue = parseInt(value, 10)
+                    if (value === '' || isNaN(numValue) || numValue < 1) {
+                      setEditFromDayInput('1')
+                      setNewTier(prev => ({ ...prev, from_day: 1 }))
+                    } else {
+                      setEditFromDayInput(String(newTier.from_day))
+                    }
+                  }}
                   min="1"
                   className="bg-background"
                 />
@@ -300,8 +371,27 @@ export function DetentionTierEditor({ tiers, onTiersChange, onSaveDefault, carri
               <Input
                 id="edit_rate"
                 type="number"
-                value={newTier.rate}
-                onChange={(e) => setNewTier(prev => ({ ...prev, rate: parseFloat(e.target.value) || 0 }))}
+                value={editRateInput}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setEditRateInput(value)
+                  if (value !== '') {
+                    const numValue = parseFloat(value)
+                    if (!isNaN(numValue) && numValue >= 0) {
+                      setNewTier(prev => ({ ...prev, rate: numValue }))
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value
+                  const numValue = parseFloat(value)
+                  if (value === '' || isNaN(numValue) || numValue < 0) {
+                    setEditRateInput('0')
+                    setNewTier(prev => ({ ...prev, rate: 0 }))
+                  } else {
+                    setEditRateInput(String(newTier.rate))
+                  }
+                }}
                 min="0"
                 step="0.01"
                 className="bg-background"

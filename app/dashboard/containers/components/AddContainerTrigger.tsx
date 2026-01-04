@@ -85,6 +85,7 @@ export const AddContainerTrigger: React.FC<AddContainerTriggerProps> = ({ reload
             ? (data.detention_tiers as unknown as Json)
             : null,
         has_detention: data.detention_enabled,
+        weekend_chargeable: data.weekend_chargeable ?? true,
       }
 
       await insertContainer(containerData)

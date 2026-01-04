@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Edit2, CheckCircle2, Send, MailCheck, Clock, AlertCircle, History } from 'lucide-react'
+import { Mail, Edit2, CheckCircle2, Send, MailCheck, Clock, AlertCircle, History, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -11,6 +11,7 @@ import {
   approveEmailDraft,
   sendClientEmailForDraft,
   createDailyDigestDraftsForToday,
+  deleteEmailDraft,
   type EmailDraftWithContainer,
   type ClientEmailEventType,
   type EmailDraftRow,
@@ -155,6 +156,7 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
   const [isApproving, startApproving] = useTransition()
   const [isGenerating, startGenerating] = useTransition()
   const [sendingDraftId, setSendingDraftId] = useState<string | null>(null)
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null)
   const [timeWindow, setTimeWindow] = useState<DigestTimeWindow>('all')
 
   // Form state for edit dialog
@@ -235,6 +237,28 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
       toast.error('Failed to send email. Please try again.')
     } finally {
       setSendingDraftId(null)
+    }
+  }
+
+  const handleDeleteDraft = async (draftId: string) => {
+    if (!confirm('Are you sure you want to delete this digest? This action cannot be undone.')) {
+      return
+    }
+
+    setDeletingDraftId(draftId)
+    try {
+      const result = await deleteEmailDraft(draftId)
+
+      if (result.ok) {
+        toast.success('Digest deleted successfully')
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Failed to delete digest. Please try again.')
+      }
+    } catch {
+      toast.error('Failed to delete digest. Please try again.')
+    } finally {
+      setDeletingDraftId(null)
     }
   }
 
@@ -523,6 +547,16 @@ export function ClientUpdatesPageContent({ drafts, sentEmails }: ClientUpdatesPa
                               {isSending ? 'Sending...' : 'Send now'}
                             </Button>
                           )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteDraft(draft.id)}
+                            disabled={deletingDraftId === draft.id}
+                            className="h-8 gap-1.5 rounded border border-red-200 bg-white text-xs text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingDraftId === draft.id ? 'Deleting...' : 'Delete'}
+                          </Button>
                           {!hasRecipientEmail && (
                             <span className="text-xs text-amber-600 flex items-center gap-1">
                               <AlertCircle className="h-3 w-3" />

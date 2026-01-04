@@ -984,10 +984,9 @@ logger.debug('Container fetched', { containerId })
 - Manage carrier-specific tiered rates
 
 #### Data Export/Import (`lib/data/data-management-actions.ts`)
-- Export all organization data
-- Import organization data from backup
-- Clear organization data (with confirmation)
-- Seed demo data for testing
+- Export all organization data (JSON backup format)
+- Import organization data from backup (containers only)
+- Clear organization data (containers and history, with confirmation dialog)
 
 #### User & Organization Management
 - **User Actions** (`lib/data/user-actions.ts`): Profile management, organization lookup

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,7 +22,7 @@ import {
 import { DemurrageTierEditor } from './DemurrageTierEditor'
 import { DetentionTierEditor } from './DetentionTierEditor'
 import { Tier, validateTierConfiguration } from '@/lib/tierUtils'
-import { getCarrierDefaults, saveCarrierDefaults } from '@/lib/data/carrier-actions'
+import { getCarrierDefaults, getAllCarrierDefaults } from '@/lib/data/carrier-actions'
 import { useAuth } from '@/lib/auth/useAuth'
 import { logger } from '@/lib/utils/logger'
 import { toast } from 'sonner'
@@ -33,6 +33,7 @@ import {
   isValidMilestone,
   type ContainerMilestone,
 } from '@/lib/utils/milestones'
+import { deriveLfdFromFreeDays, deriveFreeDaysFromLfd } from '@/lib/utils/containers'
 
 // UK carrier presets with realistic tiered demurrage/detention rates.
 // Note: Day 1 = first chargeable day (arrival date + free days).
@@ -163,6 +164,13 @@ interface ContainerFormData {
   gate_out_date: string
   empty_return_date: string
   
+  // Calendar Settings
+  weekend_chargeable?: boolean
+  
+  // LFD Input Mode
+  lfd_input_mode: 'FREE_DAYS' | 'LFD'
+  lfd_date: string
+  
   // Additional Notes
   notes: string
 }
@@ -188,37 +196,144 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
     detention_tiers: [],
     gate_out_date: '',
     empty_return_date: '',
+    weekend_chargeable: true,
+    lfd_input_mode: 'FREE_DAYS',
+    lfd_date: '',
     notes: ''
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [carrierDefaultsLoaded, setCarrierDefaultsLoaded] = useState(false)
   const [loadingDefaults, setLoadingDefaults] = useState(false)
-  const [savingDefaults, setSavingDefaults] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [availableCarriers, setAvailableCarriers] = useState<string[]>([])
+  const [loadingCarriers, setLoadingCarriers] = useState(true)
+  const [autoFillWarning, setAutoFillWarning] = useState<string | null>(null)
+  const [detentionAutoFillInfo, setDetentionAutoFillInfo] = useState<string | null>(null)
+  // Local state for free_days input to allow clearing/typing
+  const [freeDaysInput, setFreeDaysInput] = useState<string>('7')
+  // Ref to track if free_days change came from user input (to prevent sync loop)
+  const freeDaysInputRef = useRef(false)
+  // Local states for flat rate inputs to allow clearing/typing
+  const [demurrageFlatRateInput, setDemurrageFlatRateInput] = useState<string>('0')
+  const [detentionFlatRateInput, setDetentionFlatRateInput] = useState<string>('0')
+
+  // Sync freeDaysInput with formData.free_days when it changes from external sources
+  // (like carrier defaults or form reset), but not when user is typing
+  useEffect(() => {
+    if (!freeDaysInputRef.current) {
+      setFreeDaysInput(String(formData.free_days))
+    }
+    freeDaysInputRef.current = false
+  }, [formData.free_days])
+
+  // Sync flat rate inputs with formData when it changes from external sources
+  useEffect(() => {
+    setDemurrageFlatRateInput(String(formData.demurrage_flat_rate))
+  }, [formData.demurrage_flat_rate])
+
+  useEffect(() => {
+    setDetentionFlatRateInput(String(formData.detention_flat_rate))
+  }, [formData.detention_flat_rate])
+
+  // Load available carriers from templates when form opens
+  useEffect(() => {
+    if (isOpen) {
+      const loadCarriers = async () => {
+        try {
+          setLoadingCarriers(true)
+          const defaults = await getAllCarrierDefaults()
+          const carrierNames = defaults
+            .map(cd => cd.carrier_name)
+            .filter(name => name && name.trim().length > 0)
+            .sort()
+          setAvailableCarriers(carrierNames)
+        } catch (error) {
+          logger.error('Failed to load carriers:', error)
+          // Fallback to empty list
+          setAvailableCarriers([])
+          // If a carrier was selected, show warning
+          if (formData.carrier) {
+            setAutoFillWarning('Carrier templates could not be loaded. Please review fees manually.')
+          }
+        } finally {
+          setLoadingCarriers(false)
+        }
+      }
+      loadCarriers()
+    }
+  }, [isOpen])
+
+  // Retry auto-fill when carriers finish loading if a carrier was already selected
+  useEffect(() => {
+    if (!loadingCarriers && formData.carrier && availableCarriers.length > 0) {
+      const carrierTrimmed = formData.carrier.trim()
+      if (availableCarriers.includes(carrierTrimmed)) {
+        // Carrier exists, retry auto-fill (only if not already loaded)
+        if (!carrierDefaultsLoaded) {
+          void loadCarrierDefaults(carrierTrimmed)
+        }
+      } else if (availableCarriers.length > 0) {
+        // Carrier not found in templates
+        setAutoFillWarning(`Carrier "${carrierTrimmed}" not found in templates. Please review fees manually.`)
+      }
+    }
+  }, [loadingCarriers, formData.carrier, availableCarriers])
 
   const handleInputChange = <K extends keyof ContainerFormData>(field: K, value: ContainerFormData[K]) => {
+    const previousData = formData
+    
     setFormData(prev => ({
       ...prev,
       [field]: value,
     }))
 
+    // Clear auto-fill warnings when user manually edits fee-related fields
+    if (field === 'free_days' || field === 'demurrage_tiers' || field === 'demurrage_flat_rate' || 
+        field === 'detention_tiers' || field === 'detention_flat_rate') {
+      setAutoFillWarning(null)
+      setDetentionAutoFillInfo(null)
+    }
+
     if (field === 'carrier') {
       const carrierValue = typeof value === 'string' ? value.trim() : ''
-      if (carrierValue && profile?.organization_id) {
+      // Clear previous warnings when selecting a new carrier
+      setAutoFillWarning(null)
+      setDetentionAutoFillInfo(null)
+      if (carrierValue) {
         void loadCarrierDefaults(carrierValue)
       }
+    }
+    
+    // Auto-fill detention defaults when detention is enabled and carrier is selected
+    if (field === 'detention_enabled' && value === true && previousData.carrier) {
+      setDetentionAutoFillInfo(null) // Clear previous info
+      void loadDetentionDefaults(previousData.carrier)
     }
   }
 
   const loadCarrierDefaults = async (carrier: string) => {
-    if (!profile?.organization_id || !carrier.trim()) return
+    if (!carrier.trim()) return
 
     setLoadingDefaults(true)
     setCarrierDefaultsLoaded(false)
+    setAutoFillWarning(null)
     
     try {
-      const defaults = await getCarrierDefaults(carrier.trim(), profile.organization_id)
+      // Check if carriers are still loading
+      if (loadingCarriers) {
+        setAutoFillWarning('Carrier templates are still loading. Please wait a moment and try again.')
+        return
+      }
+      
+      // Check if carrier exists in available carriers
+      const carrierTrimmed = carrier.trim()
+      if (availableCarriers.length > 0 && !availableCarriers.includes(carrierTrimmed)) {
+        setAutoFillWarning(`Carrier "${carrierTrimmed}" not found in templates. Please review fees manually.`)
+        return
+      }
+      
+      const defaults = await getCarrierDefaults(carrierTrimmed)
       
       if (defaults) {
         // Normalize tier keys for UI compatibility (from/to → from_day/to_day)
@@ -234,102 +349,74 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
           rate: t.rate ?? 0,
         }))
         
-        // Found org-specific defaults - auto-load them
-        // Only auto-enable demurrage, detention must be manually enabled
+        // Auto-fill demurrage fields from template (always overwrite)
         setFormData(prev => ({
           ...prev,
+          // Free days (demurrage)
+          free_days: defaults.demurrage_free_days ?? prev.free_days,
+          // Demurrage
           demurrage_tiers: normalizedDemurrageTiers,
-          detention_tiers: normalizedDetentionTiers,
-          demurrage_enabled: normalizedDemurrageTiers.length > 0,
-          detention_enabled: false // Keep detention disabled, user must manually enable
+          demurrage_flat_rate: defaults.demurrage_flat_rate ?? 0,
+          demurrage_enabled: normalizedDemurrageTiers.length > 0 || (defaults.demurrage_flat_rate ?? 0) > 0,
+          // Note: detention fields NOT auto-filled here - only when detention_enabled is toggled ON
         }))
         setCarrierDefaultsLoaded(true)
-        toast.success(`Loaded saved defaults for ${carrier}`)
+        // Success - no warning needed
       } else {
-        // Fallback to UK presets
-        // Free days are handled by the container; tiers define chargeable days only.
-        // Day 1 in the tier = first day after free period ends.
-        const preset = UK_CARRIER_PRESETS[carrier as keyof typeof UK_CARRIER_PRESETS]
-        if (preset) {
-          const fallbackDem: Tier[] = preset.demurrage_tiers ?? []
-          const fallbackDet: Tier[] = preset.detention_tiers ?? []
-          setFormData(prev => ({
-            ...prev,
-            demurrage_tiers: fallbackDem,
-            detention_tiers: fallbackDet,
-            demurrage_enabled: true,
-            detention_enabled: false // Keep detention disabled, user must manually enable
-          }))
-          toast.info(`Applied UK standard rates for ${carrier}`)
-        }
+        // Carrier template doesn't exist
+        setAutoFillWarning(`No template found for "${carrierTrimmed}". Please configure fees manually.`)
       }
     } catch (error) {
       logger.error('Error loading carrier defaults:', error)
-      toast.error(`Failed to load defaults for ${carrier}`)
+      setAutoFillWarning('Carrier defaults could not be applied. Please review fees manually.')
     } finally {
       setLoadingDefaults(false)
     }
   }
 
-  const handleSaveDemurrageDefaults = async () => {
-    if (!formData.carrier || !profile?.organization_id) {
-      toast.error('Carrier and organization information required')
-      return
-    }
+  const loadDetentionDefaults = async (carrier: string) => {
+    if (!carrier.trim()) return
 
-    // Validate tier configurations before saving
-    const demurrageValidation = validateTierConfiguration(formData.demurrage_tiers, 'Demurrage')
-    if (!demurrageValidation.valid) {
-      toast.error(`Invalid tier configuration: ${demurrageValidation.errors.join(', ')}`)
-      return
-    }
-
-    setSavingDefaults(true)
+    setDetentionAutoFillInfo(null)
+    
     try {
-      await saveCarrierDefaults(
-        formData.carrier,
-        profile.organization_id,
-        formData.demurrage_tiers,
-        formData.detention_tiers
-      )
-      toast.success(`Carrier defaults updated for ${formData.carrier}`)
+      const defaults = await getCarrierDefaults(carrier.trim())
+      
+      if (defaults) {
+        const hasDetentionDefaults = (defaults.detention_tiers && defaults.detention_tiers.length > 0) || 
+                                     (defaults.detention_flat_rate && defaults.detention_flat_rate > 0)
+        
+        if (hasDetentionDefaults) {
+          // Normalize tier keys for UI compatibility (from/to → from_day/to_day)
+          const normalizedDetentionTiers = (defaults.detention_tiers || []).map((t: { from?: number; from_day?: number; to?: number | null; to_day?: number | null; rate?: number }) => ({
+            from_day: t.from ?? t.from_day ?? 1,
+            to_day: t.to ?? t.to_day ?? null,
+            rate: t.rate ?? 0,
+          }))
+          
+          // Auto-fill detention fields from template (only if detention is enabled)
+          setFormData(prev => ({
+            ...prev,
+            // Detention
+            detention_tiers: normalizedDetentionTiers,
+            detention_flat_rate: defaults.detention_flat_rate ?? 0,
+            // Note: detention_free_days is not in form data structure, but detention calculations use container-level field
+          }))
+          // Success - no info needed
+        } else {
+          // Carrier exists but has no detention defaults
+          setDetentionAutoFillInfo('This carrier has no saved detention defaults.')
+        }
+      } else {
+        // Carrier template doesn't exist
+        setDetentionAutoFillInfo('Carrier template not found. Please configure detention fees manually.')
+      }
     } catch (error) {
-      logger.error('Error saving carrier defaults:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to save carrier defaults')
-    } finally {
-      setSavingDefaults(false)
+      logger.error('Error loading detention defaults:', error)
+      setDetentionAutoFillInfo('Detention defaults could not be loaded. Please configure manually.')
     }
   }
 
-  const handleSaveDetentionDefaults = async () => {
-    if (!formData.carrier || !profile?.organization_id) {
-      toast.error('Carrier and organization information required')
-      return
-    }
-
-    // Validate tier configurations before saving
-    const detentionValidation = validateTierConfiguration(formData.detention_tiers, 'Detention')
-    if (!detentionValidation.valid) {
-      toast.error(`Invalid tier configuration: ${detentionValidation.errors.join(', ')}`)
-      return
-    }
-
-    setSavingDefaults(true)
-    try {
-      await saveCarrierDefaults(
-        formData.carrier,
-        profile.organization_id,
-        formData.demurrage_tiers,
-        formData.detention_tiers
-      )
-      toast.success(`Carrier defaults updated for ${formData.carrier}`)
-    } catch (error) {
-      logger.error('Error saving carrier defaults:', error)
-      toast.error(error instanceof Error ? error.message : 'Failed to save carrier defaults')
-    } finally {
-      setSavingDefaults(false)
-    }
-  }
 
   const handleTierChange = (field: 'demurrage_tiers' | 'detention_tiers', tiers: Tier[]) => {
     setFormData(prev => ({
@@ -355,6 +442,40 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
 
     if (!formData.arrival_date) {
       errors.arrival_date = 'Arrival date is required'
+    }
+
+    // Validate LFD input mode specific fields
+    if (formData.lfd_input_mode === 'LFD') {
+      if (!formData.lfd_date || formData.lfd_date.trim() === '') {
+        errors.lfd_date = 'Last Free Day (LFD) is required when using LFD input mode'
+      } else if (formData.arrival_date) {
+        const arrival = new Date(formData.arrival_date)
+        const lfd = new Date(formData.lfd_date)
+        if (!isNaN(arrival.getTime()) && !isNaN(lfd.getTime())) {
+          if (lfd < arrival) {
+            errors.lfd_date = 'Last Free Day cannot be before arrival date'
+          } else {
+            // Validate derived free days are within sane bounds
+            const derivedFreeDays = deriveFreeDaysFromLfd(
+              formData.arrival_date,
+              formData.lfd_date,
+              formData.weekend_chargeable ?? true
+            )
+            if (derivedFreeDays === null) {
+              errors.lfd_date = 'Invalid date combination'
+            } else if (derivedFreeDays < 0) {
+              errors.lfd_date = 'LFD must be after arrival date'
+            } else if (derivedFreeDays > 365) {
+              errors.lfd_date = 'Derived free days exceeds maximum (365 days)'
+            }
+          }
+        }
+      }
+    } else {
+      // Validate free_days in FREE_DAYS mode
+      if (!Number.isInteger(formData.free_days) || formData.free_days < 0 || formData.free_days > 365) {
+        errors.free_days = 'Free days must be an integer between 0 and 365'
+      }
     }
 
     // Validate tier configurations
@@ -392,8 +513,14 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
       detention_tiers: [],
       gate_out_date: '',
       empty_return_date: '',
+      weekend_chargeable: true,
+      lfd_input_mode: 'FREE_DAYS',
+      lfd_date: '',
       notes: ''
     })
+    setFreeDaysInput('7')
+    setDemurrageFlatRateInput('0')
+    setDetentionFlatRateInput('0')
     setCarrierDefaultsLoaded(false)
     setValidationErrors({})
   }
@@ -407,9 +534,28 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
 
     setIsSubmitting(true)
     try {
+      // Derive free_days if in LFD mode
+      let finalFormData = { ...formData }
+      if (formData.lfd_input_mode === 'LFD' && formData.arrival_date && formData.lfd_date) {
+        const derivedFreeDays = deriveFreeDaysFromLfd(
+          formData.arrival_date,
+          formData.lfd_date,
+          formData.weekend_chargeable ?? true
+        )
+        if (derivedFreeDays === null || derivedFreeDays < 0 || derivedFreeDays > 365) {
+          toast.error('Invalid LFD date. Please check your input.')
+          setIsSubmitting(false)
+          return
+        }
+        finalFormData = {
+          ...formData,
+          free_days: derivedFreeDays
+        }
+      }
+      
       // Call parent's onSave callback to handle insertion
       if (onSave) {
-        await onSave(formData)
+        await onSave(finalFormData)
       } else {
         toast.error('Missing onSave handler — cannot save container')
         return
@@ -615,18 +761,168 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   )}
                 </div>
                 
-                <div className="space-y-1.5">
-                  <Label htmlFor="free_days" className="text-xs font-medium text-[#111827]">
-                    Free Days
-                  </Label>
-                  <Input
-                    id="free_days"
-                    type="number"
-                    value={formData.free_days}
-                    onChange={(e) => handleInputChange('free_days', parseInt(e.target.value) || 7)}
-                    min="1"
-                    className="h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
-                  />
+                {/* Free Time Subsection */}
+                <div className="md:col-span-3 space-y-4 pt-2 border-t border-[#E5E7EB]">
+                  <div className="mb-3">
+                    <h4 className="text-xs font-semibold text-[#111827] mb-0.5">Free Time</h4>
+                    <p className="text-xs text-[#6B7280]">Set free time using Free Days or Last Free Day (LFD)</p>
+                  </div>
+                  
+                  {/* Row 1: Input Method Dropdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="lfd_input_mode" className="text-xs font-medium text-[#111827]">
+                        Set free time by
+                      </Label>
+                      <Select
+                        value={formData.lfd_input_mode}
+                        onValueChange={(value) => {
+                          if (value === 'FREE_DAYS' || value === 'LFD') {
+                            handleInputChange('lfd_input_mode', value)
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="lfd_input_mode" className="w-full h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="text-xs">
+                          <SelectItem value="FREE_DAYS">Free days</SelectItem>
+                          <SelectItem value="LFD">Last free day (LFD)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Row 1: Weekend Checkbox (right side on desktop) */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="weekend_chargeable" className="text-xs font-medium text-[#111827]">
+                        Count weekends
+                      </Label>
+                      <div className="flex items-center space-x-2.5 pt-1">
+                        <input
+                          type="checkbox"
+                          id="weekend_chargeable"
+                          checked={formData.weekend_chargeable ?? true}
+                          onChange={(e) => handleInputChange('weekend_chargeable', e.target.checked)}
+                          className="h-4 w-4 rounded border-[#D4D7DE] text-[#2563EB] focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 cursor-pointer"
+                        />
+                        <Label htmlFor="weekend_chargeable" className="text-xs font-medium cursor-pointer text-[#111827]">
+                          Count weekends
+                        </Label>
+                      </div>
+                      <p className="text-xs text-[#6B7280] mt-0.5">If unchecked, weekends don't reduce free time.</p>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Dependent Input (Free Days or LFD) */}
+                  {formData.lfd_input_mode === 'FREE_DAYS' ? (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="free_days" className="text-xs font-medium text-[#111827]">
+                        Free Days <span className="text-[#DC2626]">*</span>
+                      </Label>
+                      <Input
+                        id="free_days"
+                        type="number"
+                        value={freeDaysInput}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          // Mark that this change came from user input
+                          freeDaysInputRef.current = true
+                          // Update local input state to allow clearing
+                          setFreeDaysInput(value)
+                          // Update form data if value is valid
+                          if (value !== '') {
+                            const numValue = parseInt(value, 10)
+                            if (!isNaN(numValue) && numValue >= 0 && numValue <= 365) {
+                              handleInputChange('free_days', numValue)
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // Apply default value of 7 if field is empty or invalid on blur
+                          const value = e.target.value
+                          const numValue = parseInt(value, 10)
+                          if (value === '' || isNaN(numValue) || numValue < 1) {
+                            setFreeDaysInput('7')
+                            handleInputChange('free_days', 7)
+                          } else {
+                            // Sync display value with form data
+                            setFreeDaysInput(String(formData.free_days))
+                          }
+                        }}
+                        min="0"
+                        max="365"
+                        className={`h-8 rounded border text-xs ${
+                          validationErrors.free_days
+                            ? 'border-[#DC2626]'
+                            : 'border-[#D4D7DE] focus:border-[#2563EB] focus:ring-0'
+                        }`}
+                      />
+                      {validationErrors.free_days && (
+                        <p className="text-xs text-[#DC2626] mt-1">{validationErrors.free_days}</p>
+                      )}
+                      {/* Preview LFD */}
+                      {formData.arrival_date && (
+                        <p className="text-xs text-[#6B7280] mt-1">
+                          Preview LFD: {(() => {
+                            const lfd = deriveLfdFromFreeDays(
+                              formData.arrival_date,
+                              formData.free_days,
+                              formData.weekend_chargeable ?? true
+                            )
+                            if (!lfd) return '—'
+                            return lfd.toLocaleDateString('en-GB', {
+                              weekday: 'short',
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })
+                          })()}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="lfd_date" className="text-xs font-medium text-[#111827]">
+                        Last Free Day (LFD) <span className="text-[#DC2626]">*</span>
+                      </Label>
+                      <Input
+                        id="lfd_date"
+                        type="date"
+                        value={formData.lfd_date}
+                        onChange={(e) => {
+                          handleInputChange('lfd_date', e.target.value)
+                          if (validationErrors.lfd_date) {
+                            setValidationErrors(prev => {
+                              const newErrors = { ...prev }
+                              delete newErrors.lfd_date
+                              return newErrors
+                            })
+                          }
+                        }}
+                        className={`h-8 rounded border text-xs ${
+                          validationErrors.lfd_date
+                            ? 'border-[#DC2626]'
+                            : 'border-[#D4D7DE] focus:border-[#2563EB] focus:ring-0'
+                        }`}
+                      />
+                      {validationErrors.lfd_date && (
+                        <p className="text-xs text-[#DC2626] mt-1">{validationErrors.lfd_date}</p>
+                      )}
+                      {/* Preview Derived Free Days */}
+                      {formData.arrival_date && formData.lfd_date && (
+                        <p className="text-xs text-[#6B7280] mt-1">
+                          Preview Free Days: {(() => {
+                            const derived = deriveFreeDaysFromLfd(
+                              formData.arrival_date,
+                              formData.lfd_date,
+                              formData.weekend_chargeable ?? true
+                            )
+                            return derived !== null ? `${derived}` : '—'
+                          })()}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-1.5">
@@ -636,21 +932,41 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   <Select
                     value={formData.carrier || ''}
                     onValueChange={async (carrier) => {
+                      // Always overwrite - no confirmation
+                      // Clear previous warnings when selecting a new carrier
+                      setAutoFillWarning(null)
+                      setDetentionAutoFillInfo(null)
                       setFormData(prev => ({ ...prev, carrier }))
                       await loadCarrierDefaults(carrier)
                     }}
+                    disabled={loadingCarriers || availableCarriers.length === 0}
                   >
                     <SelectTrigger id="carrier" className="w-full h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0">
-                      <SelectValue placeholder="Select a carrier" />
+                      <SelectValue placeholder={loadingCarriers ? "Loading carriers..." : "Select a carrier"} />
                     </SelectTrigger>
-                    <SelectContent className="text-xs">
-                      {CARRIER_NAMES.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    {availableCarriers.length > 0 && (
+                      <SelectContent className="text-xs">
+                        {availableCarriers
+                          .filter(name => name && name.trim().length > 0)
+                          .map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    )}
                   </Select>
+                  {!loadingCarriers && availableCarriers.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      No carriers configured. Add templates in Settings.
+                    </p>
+                  )}
+                  {autoFillWarning && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <span className="text-amber-500">⚠</span>
+                      {autoFillWarning}
+                    </p>
+                  )}
                 </div>
                 
                 <div className="space-y-1.5">
@@ -722,8 +1038,27 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       <Input
                         id="demurrage_flat_rate"
                         type="number"
-                        value={formData.demurrage_flat_rate}
-                        onChange={(e) => handleInputChange('demurrage_flat_rate', parseFloat(e.target.value) || 0)}
+                        value={demurrageFlatRateInput}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          setDemurrageFlatRateInput(value)
+                          if (value !== '') {
+                            const numValue = parseFloat(value)
+                            if (!isNaN(numValue) && numValue >= 0) {
+                              handleInputChange('demurrage_flat_rate', numValue)
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          const numValue = parseFloat(value)
+                          if (value === '' || isNaN(numValue) || numValue < 0) {
+                            setDemurrageFlatRateInput('0')
+                            handleInputChange('demurrage_flat_rate', 0)
+                          } else {
+                            setDemurrageFlatRateInput(String(formData.demurrage_flat_rate))
+                          }
+                        }}
                         min="0"
                         step="0.01"
                         className="pl-8 h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
@@ -755,66 +1090,8 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   <DemurrageTierEditor 
                     tiers={formData.demurrage_tiers}
                     onTiersChange={(tiers) => handleTierChange('demurrage_tiers', tiers)}
-                    onSaveDefault={handleSaveDemurrageDefaults}
                     carrier={formData.carrier ?? undefined}
-                    savingDefaults={savingDefaults}
                   />
-                  
-                  {/* Quick-save button for both tiers */}
-                  {formData.carrier && (
-                    <div className="pt-2 border-t border-[#E5E7EB]">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          if (!profile?.organization_id || !formData.carrier) return
-                          
-                          // Validate both tier configurations
-                          const demurrageValidation = validateTierConfiguration(formData.demurrage_tiers, 'Demurrage')
-                          const detentionValidation = validateTierConfiguration(formData.detention_tiers, 'Detention')
-                          
-                          if (!demurrageValidation.valid || !detentionValidation.valid) {
-                            const errors = [
-                              ...(demurrageValidation.valid ? [] : demurrageValidation.errors),
-                              ...(detentionValidation.valid ? [] : detentionValidation.errors)
-                            ]
-                            toast.error(`Invalid tier configuration: ${errors.join(', ')}`)
-                            return
-                          }
-                          
-                          setSavingDefaults(true)
-                          try {
-                            await saveCarrierDefaults(
-                              formData.carrier,
-                              profile.organization_id,
-                              formData.demurrage_tiers,
-                              formData.detention_tiers
-                            )
-                            toast.success(`Saved ${formData.carrier} as default`)
-                          } catch (err) {
-                            toast.error('Failed to save default')
-                            logger.error('Error saving defaults:', err)
-                          } finally {
-                            setSavingDefaults(false)
-                          }
-                        }}
-                        disabled={savingDefaults || !formData.carrier}
-                        className="w-full sm:w-auto"
-                      >
-                        {savingDefaults ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <span className="mr-2">💾</span>
-                            Save as Default
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -842,6 +1119,12 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   Enable detention tracking
                 </Label>
               </div>
+              {detentionAutoFillInfo && (
+                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                  <span className="text-amber-500">ℹ</span>
+                  {detentionAutoFillInfo}
+                </p>
+              )}
               
               {formData.detention_enabled && (
                 <div className="space-y-4 pt-3">
@@ -882,8 +1165,27 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                       <Input
                         id="detention_flat_rate"
                         type="number"
-                        value={formData.detention_flat_rate}
-                        onChange={(e) => handleInputChange('detention_flat_rate', parseFloat(e.target.value) || 0)}
+                        value={detentionFlatRateInput}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          setDetentionFlatRateInput(value)
+                          if (value !== '') {
+                            const numValue = parseFloat(value)
+                            if (!isNaN(numValue) && numValue >= 0) {
+                              handleInputChange('detention_flat_rate', numValue)
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = e.target.value
+                          const numValue = parseFloat(value)
+                          if (value === '' || isNaN(numValue) || numValue < 0) {
+                            setDetentionFlatRateInput('0')
+                            handleInputChange('detention_flat_rate', 0)
+                          } else {
+                            setDetentionFlatRateInput(String(formData.detention_flat_rate))
+                          }
+                        }}
                         min="0"
                         step="0.01"
                         className="pl-8 h-8 rounded border border-[#D4D7DE] text-xs focus:border-[#2563EB] focus:ring-0"
@@ -895,9 +1197,7 @@ export function AddContainerForm({ isOpen, onClose, onSave }: AddContainerFormPr
                   <DetentionTierEditor
                     tiers={formData.detention_tiers}
                     onTiersChange={(tiers) => handleTierChange('detention_tiers', tiers)}
-                    onSaveDefault={handleSaveDetentionDefaults}
                     carrier={formData.carrier ?? undefined}
-                    savingDefaults={savingDefaults}
                   />
                 </div>
               )}

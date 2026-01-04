@@ -246,6 +246,7 @@ export type Database = {
           has_detention: boolean
           id: string
           is_closed: boolean
+          weekend_chargeable: boolean
           last_free_day: string | null
           lfd_date: string | null
           list_id: string | null
@@ -292,6 +293,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           version?: number
+          weekend_chargeable?: boolean
         }
         Update: {
           actual_fee_paid?: number
@@ -326,6 +328,7 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
           version?: number
+          weekend_chargeable?: boolean
         }
         Relationships: [
           {

@@ -99,3 +99,4 @@ export function ListAnalyticsTable({ data }: ListAnalyticsTableProps) {
   )
 }
 
+
