@@ -69,3 +69,6 @@
 ✅ **UI matches enterprise systems** (CargoWise / SAP TM style - concise labels)  
 ✅ **No behavioral changes whatsoever** (only UI text changed)
 
+
+
+

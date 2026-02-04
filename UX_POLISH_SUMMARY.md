@@ -97,3 +97,6 @@
 - Confirmed: Only UI text and tooltips changed
 - All calculations, weekend logic, and data persistence remain identical
 
+
+
+
