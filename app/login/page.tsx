@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams?: {
+    error?: string
+  }
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   // Check if user is already authenticated
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,7 +31,7 @@ export default async function LoginPage() {
         </Button>
       </Link>
 
-      <LoginForm />
+      <LoginForm errorMessage={searchParams?.error} />
     </div>
   )
 }

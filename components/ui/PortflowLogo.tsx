@@ -18,12 +18,11 @@ export function PortflowLogo({ className, size = 'md' }: PortflowLogoProps) {
         className={cn(
           'font-extrabold text-[#1E3A8A]',
           'select-none',
-          'tracking-tight',
           sizeClasses[size]
         )}
         style={{
           fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-          letterSpacing: '-0.04em',
+          letterSpacing: 0,
           fontWeight: 800,
         }}
       >

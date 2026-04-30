@@ -1,12 +1,16 @@
 'use client'
 
 import { createBrowserClient } from '@supabase/ssr'
-import { env } from '@/lib/config/env'
-import { logger } from '@/lib/utils/logger'
+import type { Database } from '@/types/database'
 
-export const supabase = createBrowserClient(
-  env.NEXT_PUBLIC_SUPABASE_URL,
-  env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
+}
+
+export const supabase = createBrowserClient<Database>(
+  supabaseUrl,
+  supabaseAnonKey
 )
-
-logger.debug('[Supabase] Client (browser) initialized')

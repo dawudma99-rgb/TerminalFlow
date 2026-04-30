@@ -55,6 +55,10 @@ export function hitRateLimit(
   };
 }
 
+export function clearRateLimit(key: string): void {
+  buckets.delete(key);
+}
+
 
 
 

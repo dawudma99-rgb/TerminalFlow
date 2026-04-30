@@ -4,22 +4,29 @@ import Link from 'next/link'
 
 export function PublicHeader() {
   return (
-    <header className="border-b bg-white">
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <PortflowLogo size="md" />
-          <nav className="flex items-center gap-6">
-            <a href="#features" className="text-sm font-medium text-gray-700 hover:text-gray-900">
+        <div className="flex h-16 items-center justify-between">
+          <Link href="/" aria-label="TerminalFlow home" className="shrink-0">
+            <PortflowLogo size="md" />
+          </Link>
+          <nav className="flex items-center gap-3 sm:gap-6">
+            <Link href="/#features" className="hidden text-sm font-medium text-slate-600 hover:text-slate-950 sm:inline">
               Features
-            </a>
-            <Link href="/pricing" className="text-sm font-medium text-gray-700 hover:text-gray-900">
+            </Link>
+            <Link href="/pricing" className="hidden text-sm font-medium text-slate-600 hover:text-slate-950 sm:inline">
               Pricing
             </Link>
-            <Link href="/login">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className="rounded-lg">
+              <Link href="/login">
                 Login
-              </Button>
-            </Link>
+              </Link>
+            </Button>
+            <Button asChild size="sm" className="rounded-lg">
+              <Link href="/login">
+                Get access
+              </Link>
+            </Button>
           </nav>
         </div>
       </div>

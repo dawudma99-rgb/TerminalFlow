@@ -3,8 +3,6 @@
 import { Resend } from 'resend'
 import { logger } from '@/lib/utils/logger'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 /**
  * Sends an alert email using Resend.
  * 
@@ -36,6 +34,8 @@ export async function sendAlertEmail(params: {
   }
 
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY)
+
     // Get FROM email from env variable, default to alerts@terminalflow.app
     const fromEmail = process.env.EMAIL_FROM || 'alerts@terminalflow.app'
     const defaultFromName = 'TerminalFlow Alerts'

@@ -1,603 +1,316 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { PublicShell } from '@/components/layout/PublicShell'
+import { AiPortMonitor } from '@/components/marketing/AiPortMonitor'
+import { HeroShowcase } from '@/components/marketing/HeroShowcase'
+import { ScrollReveal } from '@/components/marketing/ScrollReveal'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import Link from 'next/link'
 import Image from 'next/image'
-import { Clock, Layers, AlertTriangle, ShieldCheck, ListChecks, TrendingUp, Mail, BarChart3, FileText, FileSpreadsheet, MessageSquare, Brain, CheckCircle } from 'lucide-react'
+import Link from 'next/link'
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Clock3,
+  FileSpreadsheet,
+  History,
+  Layers3,
+  Mail,
+  Radar,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Zap,
+} from 'lucide-react'
 
-export default async function HomePage() {
-  // Check if user is authenticated
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+const painPoints = [
+  {
+    icon: Clock3,
+    title: 'Priorities reset every morning',
+    copy: 'Teams rebuild urgency from spreadsheets, emails, and memory before any container actually moves forward.',
+  },
+  {
+    icon: AlertTriangle,
+    title: 'Charges surface after the damage',
+    copy: 'Demurrage risk appears when the invoice arrives instead of when the team still has time to act.',
+  },
+  {
+    icon: Layers3,
+    title: 'Status lives in too many places',
+    copy: 'Client updates, port notes, and internal ownership drift apart across disconnected tools.',
+  },
+]
 
-  // If authenticated, redirect to dashboard
-  if (user) {
-    redirect('/dashboard')
-  }
+const features = [
+  {
+    icon: Zap,
+    title: 'Priority command center',
+    copy: 'See overdue, at-risk, recently changed, and client-sensitive containers in one ranked view.',
+  },
+  {
+    icon: FileSpreadsheet,
+    title: 'Spreadsheet-friendly intake',
+    copy: 'Bring in the data your team already uses, then keep it clean without file versions.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Cost exposure tracking',
+    copy: 'Project detention and demurrage risk before charges become unavoidable.',
+  },
+  {
+    icon: Mail,
+    title: 'Client-ready updates',
+    copy: 'Generate consistent update drafts from live records and review them before sending.',
+  },
+  {
+    icon: History,
+    title: 'Change history',
+    copy: 'Track who changed what, when it changed, and what was communicated.',
+  },
+  {
+    icon: Radar,
+    title: 'AI port signals',
+    copy: 'Monitor dwell, delay patterns, and recurring bottlenecks across ports and lanes.',
+  },
+]
 
-  // If not authenticated, show marketing landing page
+const workflow = [
+  'Import container data',
+  'Rank risk by urgency',
+  'Review port signals',
+  'Send client updates',
+]
+
+const productViews = [
+  {
+    label: 'Dashboard',
+    title: 'A morning view built around action.',
+    copy: 'The dashboard separates urgent exceptions from normal movement, so operators know where to start.',
+    image: '/images/dashboard.png',
+    alt: 'TerminalFlow dashboard',
+  },
+  {
+    label: 'Containers',
+    title: 'Operational records without spreadsheet drift.',
+    copy: 'Filter containers by client, lane, list, milestone, and risk while keeping one shared source of truth.',
+    image: '/images/containerspage.png',
+    alt: 'TerminalFlow containers page',
+  },
+  {
+    label: 'Analytics',
+    title: 'Patterns that explain where risk is building.',
+    copy: 'Track exposure, port performance, and status health before delays turn into avoidable cost.',
+    image: '/images/analytics.png',
+    alt: 'TerminalFlow analytics page',
+  },
+]
+
+const replacements = [
+  { icon: FileSpreadsheet, label: 'Versioned spreadsheets' },
+  { icon: Mail, label: 'Manual update emails' },
+  { icon: AlertTriangle, label: 'Late cost checks' },
+  { icon: ShieldCheck, label: 'Memory-based ownership' },
+]
+
+export default function HomePage() {
   return (
     <PublicShell>
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-slate-950 text-white">
-        {/* Background image */}
-        <div className="absolute inset-0">
-          <Image
-            src="/images/logistics-hero.jpg"
-            alt="Container ships being loaded at a busy terminal"
-            fill
-            className="object-cover object-center opacity-75"
-            priority
-            sizes="100vw"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/80 to-slate-950/30" />
-        </div>
+      <section className="relative isolate overflow-hidden bg-[#f7fafc]">
+        <div className="absolute inset-x-0 top-0 -z-10 h-[44rem] bg-[linear-gradient(135deg,#ffffff_0%,#eef9fb_42%,#f8fafc_100%)]" />
+        <div className="absolute left-0 top-28 -z-10 h-72 w-72 rounded-full bg-cyan-200/35 blur-3xl" />
+        <div className="absolute right-0 top-10 -z-10 h-80 w-80 rounded-full bg-emerald-200/30 blur-3xl" />
 
-        {/* Foreground content */}
-        <div className="relative">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-28">
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-10 lg:gap-16 items-center">
-              {/* LEFT: text + buttons */}
-              <div className="max-w-xl space-y-6">
-                <div className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium tracking-wide text-slate-100 mb-3">
-                  Built for freight forwarders
-                </div>
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white">
-                  Stop losing money to demurrage.
-                </h1>
-                <p className="text-xl text-slate-200 leading-relaxed">
-                  TerminalFlow gives freight forwarders a single operational view of import containers — so teams can see current status, identify priority actions, and understand cost exposure.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 items-start">
+        <div className="container mx-auto px-4 pb-16 pt-16 sm:px-6 sm:pb-20 sm:pt-20 lg:px-8 lg:pb-24 lg:pt-24">
+          <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1.05fr]">
+            <ScrollReveal className="max-w-3xl" direction="right">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-3 py-1.5 text-sm font-medium text-cyan-800 shadow-sm">
+                <Sparkles className="h-4 w-4" />
+                Built for freight forwarding operations
+              </div>
+              <h1 className="text-5xl font-semibold leading-[0.95] tracking-[-0.02em] text-slate-950 sm:text-6xl lg:text-7xl">
+                Stop finding demurrage risk after it is already expensive.
+              </h1>
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-650 sm:text-xl">
+                TerminalFlow gives import teams a live operating layer for container priority, cost exposure, client communication, and AI-assisted port performance.
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button asChild size="lg" className="h-12 rounded-lg bg-slate-950 px-6 text-base text-white shadow-lg shadow-slate-300 hover:bg-slate-800">
                   <Link href="/login">
-                    <Button size="lg" className="w-full sm:w-auto">
-                      Get early access
-                    </Button>
+                    Get early access
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <a
-                    href="mailto:sales@terminalflow.app?subject=Book a 15-minute walkthrough"
-                    className="text-sm text-slate-300 hover:text-blue-300 underline"
-                  >
-                    Book a 15-minute walkthrough
-                  </a>
-                </div>
-              </div>
-
-              {/* RIGHT: small stat/summary card */}
-              <div className="max-w-md lg:justify-self-end lg:mr-8">
-                <div className="rounded-2xl bg-white/10 backdrop-blur shadow-xl border border-white/10 p-5 space-y-4">
-                  <p className="text-sm font-medium text-slate-100 uppercase tracking-wide">
-                    Demurrage is avoidable
-                  </p>
-                  <p className="text-xl font-semibold text-white">
-                    Clarity on status and priority.
-                  </p>
-                  <p className="text-sm text-slate-200/80">
-                    View container status across your operation, identify which items require action, and understand where delays and charges are emerging — before invoices arrive.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* The Operational Problem */}
-      <section className="py-20 sm:py-24 bg-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 mb-12 text-center">
-              The operational problem
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="flex gap-5">
-                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <Clock className="w-7 h-7 text-slate-700" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    No operational prioritisation
-                  </h3>
-                  <p className="text-slate-600 leading-relaxed">
-                    No clear distinction between what needs action today and what can wait.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-5">
-                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <Layers className="w-7 h-7 text-slate-700" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    Fragmented container visibility
-                  </h3>
-                  <p className="text-slate-600 leading-relaxed">
-                    Information scattered across spreadsheets, emails, and memory.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-5">
-                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <AlertTriangle className="w-7 h-7 text-slate-700" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    Reactive cost exposure
-                  </h3>
-                  <p className="text-slate-600 leading-relaxed">
-                    Charges discovered after the invoice arrives.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-5">
-                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <ShieldCheck className="w-7 h-7 text-slate-700" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    No accountability trail
-                  </h3>
-                  <p className="text-slate-600 leading-relaxed">
-                    No record of who changed what, when, or what was communicated.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* What TerminalFlow Gives You */}
-      <section className="py-20 sm:py-24 bg-gray-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 mb-12 text-center">
-              What TerminalFlow gives you
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex gap-5">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <ListChecks className="w-7 h-7 text-slate-700" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      Morning priority view
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      Start the day with a ranked view of what's overdue, what's at risk, and what can wait.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex gap-5">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <Layers className="w-7 h-7 text-slate-700" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      One source of truth
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      Lists work like spreadsheet tabs—without version confusion or duplicated files.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex gap-5">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <AlertTriangle className="w-7 h-7 text-slate-700" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      Cost exposure visibility
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      See projected cost before charges hit the invoice.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex gap-5">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <ShieldCheck className="w-7 h-7 text-slate-700" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      Team accountability
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      Every change is recorded with who did it and when.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex gap-5">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <Mail className="w-7 h-7 text-slate-700" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      Client update workflow
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      Generate a draft update, review, approve, and send—consistent every time.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex gap-5">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <BarChart3 className="w-7 h-7 text-slate-700" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                      Operational insights
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      Spot bottlenecks by port and workload trends across your operation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* See it in action */}
-      <section id="features" className="py-24 sm:py-32 bg-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 mb-20 text-center">
-              See it in action
-            </h2>
-            <div className="space-y-16">
-              {/* Dashboard */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 sm:p-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                      DASHBOARD
-                    </p>
-                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 mb-6">
-                      Morning priorities
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="text-slate-700">
-                        Overdue = costing money now
-                      </li>
-                      <li className="text-slate-700">
-                        At Risk = will become expensive soon
-                      </li>
-                      <li className="text-slate-700">
-                        Today's activity = what changed since yesterday
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                    <Image
-                      src="/images/dashboard.png"
-                      alt="TerminalFlow dashboard"
-                      width={1400}
-                      height={900}
-                      className="w-full h-auto"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Container Control */}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 sm:p-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div className="lg:order-2 rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                    <Image
-                      src="/images/containerspage.png"
-                      alt="Container control room"
-                      width={1400}
-                      height={900}
-                      className="w-full h-auto"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  </div>
-                  <div className="lg:order-1">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                      CONTAINER CONTROL
-                    </p>
-                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 mb-6">
-                      One source of truth
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="text-slate-700">
-                        Lists = client, lane, or team views
-                      </li>
-                      <li className="text-slate-700">
-                        Search = find any container instantly
-                      </li>
-                      <li className="text-slate-700">
-                        Status badges = Safe, Warning, or Overdue
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Analytics */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 sm:p-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                      ANALYTICS
-                    </p>
-                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 mb-6">
-                      Cost of inaction
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="text-slate-700">
-                        7-day projection = what you'll pay if nothing changes
-                      </li>
-                      <li className="text-slate-700">
-                        Financial impact = prioritise by cost, not volume
-                      </li>
-                      <li className="text-slate-700">
-                        Health breakdown = Safe / Warning / Overdue / Closed
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                    <Image
-                      src="/images/analytics.png"
-                      alt="Analytics overview"
-                      width={1400}
-                      height={900}
-                      className="w-full h-auto"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Port Performance */}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 sm:p-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div className="lg:order-2 rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                    <Image
-                      src="/images/portperformance-analytics.png"
-                      alt="Port performance analytics"
-                      width={1400}
-                      height={900}
-                      className="w-full h-auto"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  </div>
-                  <div className="lg:order-1">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                      ANALYTICS
-                    </p>
-                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 mb-6">
-                      Port bottlenecks
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="text-slate-700">
-                        Port ranking = which ports have lowest average days left
-                      </li>
-                      <li className="text-slate-700">
-                        Container count = volume per port
-                      </li>
-                      <li className="text-slate-700">
-                        Pattern recognition = anticipate delays before they cost money
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Audit Trail */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 sm:p-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                      AUDIT & HISTORY
-                    </p>
-                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 mb-6">
-                      Accountability by default
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="text-slate-700">
-                        Change log = who changed what and when
-                      </li>
-                      <li className="text-slate-700">
-                        Investigation = resolve discrepancies with proof
-                      </li>
-                      <li className="text-slate-700">
-                        Team confidence = no "who changed this?" confusion
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                    <Image
-                      src="/images/historylog.png"
-                      alt="Activity log"
-                      width={1400}
-                      height={900}
-                      className="w-full h-auto"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Client Communication */}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 sm:p-12">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div className="lg:order-2 rounded-xl border border-slate-200 shadow-md overflow-hidden">
-                    <Image
-                      src="/images/dailyemaildigest.png"
-                      alt="Client updates workflow"
-                      width={1400}
-                      height={900}
-                      className="w-full h-auto"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  </div>
-                  <div className="lg:order-1">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                      CLIENT COMMUNICATION
-                    </p>
-                    <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 mb-6">
-                      Standardised updates
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="text-slate-700">
-                        Draft generation = system creates update from container data
-                      </li>
-                      <li className="text-slate-700">
-                        Review & approve = no copy-paste from spreadsheets
-                      </li>
-                      <li className="text-slate-700">
-                        Send history = record of what was communicated to each client
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* What TerminalFlow Replaces */}
-      <section className="py-24 sm:py-32 bg-slate-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 mb-16 text-center">
-              What TerminalFlow replaces in daily operations
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <FileSpreadsheet className="w-10 h-10 text-slate-700" />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-3">
-                  Multiple spreadsheets
-                </h3>
-                <p className="text-slate-600 leading-relaxed">
-                  One shared system with persistent organisation.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <MessageSquare className="w-10 h-10 text-slate-700" />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-3">
-                  Scattered email threads
-                </h3>
-                <p className="text-slate-600 leading-relaxed">
-                  Standardised client updates with full history.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <Brain className="w-10 h-10 text-slate-700" />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-3">
-                  Manual prioritisation
-                </h3>
-                <p className="text-slate-600 leading-relaxed">
-                  Automatic ranking by urgency and cost impact.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <FileText className="w-10 h-10 text-slate-700" />
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-3">
-                  Memory and guesswork
-                </h3>
-                <p className="text-slate-600 leading-relaxed">
-                  Complete audit trail with attribution.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Reassurance Strip */}
-      <section className="py-16 bg-white border-y border-slate-200">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-5xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-              <div>
-                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-blue-50 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-[#2563EB]" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  No heavy setup
-                </h3>
-                <p className="text-sm text-slate-600">
-                  Import your existing spreadsheet and start immediately.
-                </p>
-              </div>
-              <div>
-                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-blue-50 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-[#2563EB]" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  Designed for ops teams
-                </h3>
-                <p className="text-sm text-slate-600">
-                  Built for the daily workflow of freight forwarders.
-                </p>
-              </div>
-              <div>
-                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-blue-50 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-[#2563EB]" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  Immediate visibility
-                </h3>
-                <p className="text-sm text-slate-600">
-                  See what matters from day one, no training required.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA Section */}
-      <section className="py-20 sm:py-24 bg-[#2563EB] text-white">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
-              Ready to get out of spreadsheets?
-            </h2>
-            <p className="text-lg sm:text-xl mb-8 text-blue-100 leading-relaxed">
-              Give your team a single live view of every container and stay ahead of demurrage fees.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link href="/login">
-                <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                  Get early access
                 </Button>
-              </Link>
-              <a
-                href="mailto:sales@terminalflow.app?subject=Talk to us"
-                className="text-sm text-blue-100 hover:text-white underline"
-              >
-                Talk to us
-              </a>
+                <Button asChild size="lg" variant="outline" className="h-12 rounded-lg border-slate-300 bg-white px-6 text-base">
+                  <Link href="/login">Login</Link>
+                </Button>
+              </div>
+              <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
+                {['Live container queue', '7-day cost projection', 'AI port signals'].map((item) => (
+                  <div key={item} className="rounded-xl border border-slate-200 bg-white/80 p-4 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </ScrollReveal>
+
+            <HeroShowcase />
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-14 sm:py-16">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
+            {painPoints.map((item, index) => (
+              <ScrollReveal key={item.title} delay={index * 0.06}>
+                <div className="h-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-800">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-slate-950">{item.title}</h2>
+                  <p className="mt-2 leading-7 text-slate-600">{item.copy}</p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="features" className="bg-slate-950 py-20 text-white sm:py-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+            <ScrollReveal direction="right">
+              <p className="text-sm font-semibold uppercase text-cyan-300">Operating system</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.01em] sm:text-5xl">
+                One calmer way to run the import desk.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-300">
+                TerminalFlow is not another spreadsheet. It is the layer that turns container records into risk, priority, ownership, and communication.
+              </p>
+            </ScrollReveal>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {features.map((feature, index) => (
+                <ScrollReveal key={feature.title} delay={(index % 2) * 0.06} direction="left">
+                  <div className="h-full rounded-xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur transition hover:-translate-y-1 hover:bg-white/[0.09]">
+                    <feature.icon className="h-5 w-5 text-cyan-300" />
+                    <h3 className="mt-5 text-lg font-semibold">{feature.title}</h3>
+                    <p className="mt-2 leading-7 text-slate-300">{feature.copy}</p>
+                  </div>
+                </ScrollReveal>
+              ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-20 sm:py-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal className="mx-auto max-w-3xl text-center">
+            <p className="text-sm font-semibold uppercase text-cyan-700">Workflow</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-slate-950 sm:text-5xl">
+              From messy data to clear action.
+            </h2>
+          </ScrollReveal>
+
+          <div className="mx-auto mt-12 grid max-w-6xl gap-4 md:grid-cols-4">
+            {workflow.map((step, index) => (
+              <ScrollReveal key={step} delay={index * 0.06}>
+                <div className="relative min-h-36 rounded-xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-sm font-semibold text-cyan-700">0{index + 1}</p>
+                  <p className="mt-8 text-xl font-semibold leading-7 text-slate-950">{step}</p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white pb-20 sm:pb-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal className="mx-auto max-w-6xl">
+            <AiPortMonitor />
+          </ScrollReveal>
+        </div>
+      </section>
+
+      <section className="bg-[#f7fafc] py-20 sm:py-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <ScrollReveal className="max-w-3xl">
+              <p className="text-sm font-semibold uppercase text-cyan-700">Product views</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-slate-950 sm:text-5xl">
+                Built around the daily flow of import operations.
+              </h2>
+            </ScrollReveal>
+
+            <div className="mt-12 grid gap-5 lg:grid-cols-3">
+              {productViews.map((view, index) => (
+                <ScrollReveal key={view.title} delay={index * 0.08}>
+                  <div className="h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="p-6">
+                      <p className="text-sm font-semibold uppercase text-cyan-700">{view.label}</p>
+                      <h3 className="mt-3 text-2xl font-semibold text-slate-950">{view.title}</h3>
+                      <p className="mt-3 leading-7 text-slate-600">{view.copy}</p>
+                    </div>
+                    <div className="border-t border-slate-200 bg-slate-100 p-2">
+                      <Image
+                        src={view.image}
+                        alt={view.alt}
+                        width={900}
+                        height={580}
+                        className="h-auto w-full rounded-lg border border-slate-200 bg-white"
+                        sizes="(max-width: 1024px) 100vw, 31vw"
+                      />
+                    </div>
+                  </div>
+                </ScrollReveal>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-20 sm:py-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-6xl gap-10 rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-xl sm:p-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <ScrollReveal direction="right">
+              <p className="text-sm font-semibold uppercase text-cyan-300">Replaces</p>
+              <h2 className="mt-3 text-3xl font-semibold sm:text-5xl">Less chasing. More control.</h2>
+              <p className="mt-5 text-lg leading-8 text-slate-300">
+                Keep the operational rhythm your team understands while removing the manual work that creates risk.
+              </p>
+            </ScrollReveal>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {replacements.map((item, index) => (
+                <ScrollReveal key={item.label} delay={index * 0.06} direction="left">
+                  <div className="rounded-xl border border-white/10 bg-white/10 p-5">
+                    <item.icon className="h-6 w-6 text-cyan-300" />
+                    <p className="mt-5 text-lg font-semibold">{item.label}</p>
+                  </div>
+                </ScrollReveal>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white pb-20 sm:pb-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal className="mx-auto max-w-4xl text-center">
+            <h2 className="text-3xl font-semibold tracking-[-0.01em] text-slate-950 sm:text-5xl">
+              Run tomorrow morning from one live container view.
+            </h2>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
+              Login takes the team straight into the software. The public landing page stays separate from the operating workspace.
+            </p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button asChild size="lg" className="h-12 rounded-lg bg-slate-950 px-6 text-base text-white hover:bg-slate-800">
+                <Link href="/login">Get early access</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="h-12 rounded-lg border-slate-300 bg-white px-6 text-base">
+                <Link href="/login">Login</Link>
+              </Button>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
     </PublicShell>

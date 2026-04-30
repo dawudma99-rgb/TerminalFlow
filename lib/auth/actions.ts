@@ -2,8 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { hitRateLimit } from '@/lib/rate-limit/simpleLimiter'
+import { clearRateLimit, hitRateLimit } from '@/lib/rate-limit/simpleLimiter'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 
 export type SignInResult = {
   success: boolean
@@ -22,9 +23,16 @@ export async function signIn(
       ? email.trim().toLowerCase()
       : 'unknown-email'
 
+  if (!email.trim() || !password) {
+    return {
+      success: false,
+      error: 'Enter your email and password.',
+    }
+  }
+
   const rateResult = hitRateLimit(`login:email:${emailKey}`, {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // max 5 attempts per 15 minutes per email
+    max: 10, // max 10 attempts per 15 minutes per email
   })
 
   if (!rateResult.ok) {
@@ -35,16 +43,48 @@ export async function signIn(
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  })
+
   if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('email not confirmed')) {
+      return {
+        success: false,
+        error: 'This email has not been confirmed yet. Check your inbox for the Supabase confirmation email.',
+      }
+    }
+
+    if (message.includes('invalid login credentials')) {
+      return {
+        success: false,
+        error: 'Invalid email or password.',
+      }
+    }
+
     return {
       success: false,
-      error: 'Invalid email or password.',
+      error: `Sign in failed: ${error.message}`,
     }
   }
 
+  clearRateLimit(`login:email:${emailKey}`)
   revalidatePath('/')
   return { success: true }
+}
+
+export async function signInWithForm(formData: FormData) {
+  const email = formData.get('email')?.toString() ?? ''
+  const password = formData.get('password')?.toString() ?? ''
+  const result = await signIn(email, password)
+
+  if (!result.success) {
+    redirect(`/login?error=${encodeURIComponent(result.error ?? 'Unable to sign in.')}`)
+  }
+
+  redirect('/dashboard')
 }
 
 export async function signOut() {
